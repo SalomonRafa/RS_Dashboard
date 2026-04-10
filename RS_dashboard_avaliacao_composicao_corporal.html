@@ -702,11 +702,15 @@ svg text{font-family:'DM Sans',sans-serif}
   </div>
 
   <div class="card">
-    <div class="clbl">Gasto por Tecido <span class="clbl-sub">estimativa da TMB por órgão</span></div>
+    <div class="clbl">Gasto por Tecido <span class="clbl-sub">estimativa proporcional da TMB por órgão</span></div>
     <table class="gtbl" style="margin-top:6px">
-      <thead><tr><th>Tecido</th><th style="text-align:right">kcal/kg</th><th style="text-align:right">kcal</th></tr></thead>
+      <thead><tr><th>Tecido</th><th style="text-align:right">kg</th><th style="text-align:right">kcal/kg</th><th style="text-align:right">kcal</th></tr></thead>
       <tbody id="org-tbody"></tbody>
     </table>
+    <div style="font-size:9px;color:var(--mu);margin-top:8px;line-height:1.5">
+      Massas de órgãos estimadas por equações de regressão (Heymsfield 2012, Levine 1990, Wang 2010).<br>
+      Coeficientes metabólicos: Elia (1992). Valores individuais não mensuráveis clinicamente — usar como referência proporcional.
+    </div>
   </div>
 </div>
 
@@ -723,10 +727,44 @@ svg text{font-family:'DM Sans',sans-serif}
 
     <!-- Parâmetros dinâmicos por objetivo -->
     <div id="params-cut" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div class="ig"><span class="il">% Gordura alvo</span><input class="i" id="meta-gord" type="number" step="0.5" value="21" placeholder="%" oninput="recalcCenarios()"></div>
-      <div class="ig"><span class="il">kcal/kg MLG por dia</span><input class="i" id="meta-kcal-lbm" type="number" step="1" value="32" placeholder="kcal/kg" oninput="recalcCenarios()"></div>
-      <div class="ig"><span class="il">Gordura a reduzir (kg)</span><input class="i" id="meta-gord-kg" type="number" step="0.1" value="" placeholder="kg" oninput="recalcCenarios()"></div>
-      <div class="ig"><span class="il">Prazo (dias)</span><input class="i" id="meta-dias" type="number" step="1" value="60" placeholder="dias" oninput="recalcCenarios()"></div>
+      <div class="ig">
+        <span class="il" style="display:flex;align-items:center;justify-content:space-between">
+          % Gordura alvo
+          <span id="gord-alvo-calc" style="font-size:9px;color:var(--tl)"></span>
+        </span>
+        <input class="i" id="meta-gord" type="number" step="0.5" placeholder="%" oninput="autoCalcCorte()">
+      </div>
+      <div class="ig">
+        <span class="il" style="display:flex;align-items:center;justify-content:space-between">
+          Gordura a reduzir (kg)
+          <span id="gord-kg-src" style="font-size:9px;color:var(--purple)">(calculado)</span>
+        </span>
+        <input class="i inferred" id="meta-gord-kg" type="number" step="0.1" placeholder="calculado pelo %G alvo" oninput="onGordKgManual()">
+      </div>
+      <div class="ig">
+        <span class="il" style="display:flex;align-items:center;justify-content:space-between">
+          Ritmo de perda
+          <span id="ritmo-label" style="font-size:9px"></span>
+        </span>
+        <select class="i" id="meta-ritmo" onchange="autoCalcCorte()">
+          <option value="conservador">Conservador — 0,5% BF/mês</option>
+          <option value="moderado" selected>Moderado — 1,0% BF/mês</option>
+          <option value="agressivo">Agressivo — 1,5% BF/mês</option>
+          <option value="manual">Manual — definir déficit</option>
+        </select>
+      </div>
+      <div class="ig">
+        <span class="il" style="display:flex;align-items:center;justify-content:space-between">
+          kcal/kg MLG por dia
+          <span style="font-size:9px;color:var(--mu)">protocolo</span>
+        </span>
+        <input class="i" id="meta-kcal-lbm" type="number" step="1" value="32" placeholder="kcal/kg" oninput="recalcCenarios()">
+      </div>
+      <!-- Déficit manual só aparece no ritmo manual -->
+      <div class="ig" id="wrap-deficit-manual" style="display:none;grid-column:span 2">
+        <span class="il">Déficit diário manual (kcal)</span>
+        <input class="i" id="meta-deficit" type="number" step="50" value="500" placeholder="kcal/dia" oninput="recalcCenarios()">
+      </div>
     </div>
     <div id="params-bulk" style="display:none;grid-template-columns:1fr 1fr;gap:8px">
       <div class="ig"><span class="il">Músculo a ganhar (kg)</span><input class="i" id="meta-musc-kg" type="number" step="0.1" placeholder="ex: 2" oninput="recalcCenarios()"></div>
@@ -949,7 +987,41 @@ function setObj(obj) {
   recalcCenarios();
 }
 
-function recalcCenarios() {
+// ── Auto-cálculo do corte: %G alvo → gordura a perder → déficit → prazo
+let gordKgManual = false;
+function onGordKgManual() {
+  gordKgManual = el('meta-gord-kg').value !== '';
+  el('gord-kg-src').textContent = gordKgManual ? '(manual)' : '(calculado)';
+  el('meta-gord-kg').className = gordKgManual ? 'i' : 'i inferred';
+  recalcCenarios();
+}
+
+function autoCalcCorte() {
+  const ritmo = el('meta-ritmo').value;
+  el('wrap-deficit-manual').style.display = ritmo === 'manual' ? 'grid' : 'none';
+
+  // Se temos %G atual e %G alvo, calcula gordura a perder preservando MLG
+  if (!gordKgManual && window._ctx) {
+    const { massa, gordKg, mlg } = window._ctx;
+    const metaGordPct = num('meta-gord') / 100;
+    if (!isNaN(metaGordPct) && metaGordPct > 0 && metaGordPct < 1) {
+      // Novo peso = MLG / (1 - %G_meta) → preserva MLG integralmente
+      const novoPeso  = mlg / (1 - metaGordPct);
+      const gordPerder = gordKg - (novoPeso * metaGordPct);
+      if (gordPerder > 0) {
+        el('meta-gord-kg').value = gordPerder.toFixed(2);
+        el('gord-kg-src').textContent = '(calculado pelo %G alvo)';
+        el('meta-gord-kg').className = 'i inferred';
+        el('gord-alvo-calc').textContent = `→ ${f2(gordPerder)} kg gordura`;
+      }
+    }
+  }
+  recalcCenarios();
+}
+
+// pp BF/mês por ritmo
+const RITMO_PP = { conservador: 0.5, moderado: 1.0, agressivo: 1.5 };
+
   if (window._ctx) {
     atualizarGET(window._ctx);
   } else {
@@ -1356,6 +1428,7 @@ function calcular() {
   renderEqGrid(vals);
   atualizarGET(window._ctx);
   renderCmpTMB(vals);
+  if (typeof autoCalcCorte === 'function') autoCalcCorte();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1399,22 +1472,55 @@ function atualizarGET(ctx) {
     <span style="font-size:10px;color:var(--mu);margin-left:3px">${i<4?f1(r.k/get*100)+'%':''}</span></td>
   </tr>`).join('');
 
-  // Gasto por tecido — usa dados reais do paciente
-  const orgaos=[
-    {n:'Fígado',c:200,k:1.54,nota:''},
-    {n:'Cérebro',c:240,k:1.40,nota:''},
-    {n:'Coração',c:440,k:0.33,nota:''},
-    {n:'Rins',c:440,k:0.31,nota:''},
-    {n:'Músculo esquelético',c:13,k:musculo,nota:'paciente'},
-    {n:'Gordura corporal',c:4.5,k:gordKg,nota:'paciente'},
+  // ── Estimativa de massa dos órgãos por regressão (Heymsfield 2012, Levine 1990, Wang 2010) ──
+  const idadeCtx = ctx.idade || 30;
+
+  // Fígado: escala com massa total, diferença por sexo
+  const kgFigado = Math.min(
+    (sexo==='F' ? 1.37 : 1.56) + (massa > 60 ? (massa-60)*0.005 : 0), 2.2);
+
+  // Cérebro: sexo-dependente, declina ~1,8%/década após 40
+  const kgCerebro = (sexo==='F' ? 1.25 : 1.40)
+    * (1 - 0.018 * Math.max(0, (idadeCtx-40)/10));
+
+  // Coração: correlaciona com MLG
+  const kgCoracao = Math.max(0.22, Math.min(
+    (sexo==='F' ? 0.27 : 0.33) + (mlg - (sexo==='F' ? 40 : 55)) * 0.002, 0.55));
+
+  // Rins (par): escala com massa corporal
+  const kgRins = Math.max(0.40, Math.min(
+    (sexo==='F' ? 0.56 : 0.63) + (massa-65)*0.003, 0.90));
+
+  // Outros tecidos (pele, pulmões, intestinos, esqueleto): residual ~8% da massa
+  const kgOutros = massa * 0.08;
+
+  const orgaos = [
+    { n:'Fígado',              c:200, k:kgFigado,  src:'estimado' },
+    { n:'Cérebro',             c:240, k:kgCerebro, src:'estimado' },
+    { n:'Coração',             c:440, k:kgCoracao, src:'estimado' },
+    { n:'Rins (par)',          c:440, k:kgRins,    src:'estimado' },
+    { n:'Músculo esquelético', c:13,  k:musculo,   src:'paciente' },
+    { n:'Gordura corporal',    c:4.5, k:gordKg,    src:'paciente' },
+    { n:'Outros tecidos',      c:12,  k:kgOutros,  src:'estimado' },
   ];
-  const totOrg=orgaos.reduce((s,o)=>s+o.c*o.k,0);
-  el('org-tbody').innerHTML=orgaos.map(o=>`<tr>
-    <td style="color:var(--lb)">${o.n}${o.nota?` <span style="font-size:9px;color:var(--tl)">(dados do paciente)</span>`:''}</td>
-    <td style="text-align:right">${o.c}</td>
-    <td style="text-align:right">${f0(o.c*o.k)}</td>
+
+  const totOrg   = orgaos.reduce((s,o) => s+o.c*o.k, 0);
+  const tmb_ref  = window._vals ? (window._vals[eqSel] || 0) : 0;
+  const cobertura = tmb_ref > 0 ? (totOrg/tmb_ref*100) : null;
+
+  el('org-tbody').innerHTML = orgaos.map(o => `<tr>
+    <td style="color:var(--lb)">${o.n}
+      <span style="font-size:9px;color:${o.src==='paciente'?'var(--tl)':'var(--purple)'};margin-left:4px">${o.src==='paciente'?'real':'estimado'}</span>
+    </td>
+    <td style="text-align:right;color:var(--mu)">${f2(o.k)}</td>
+    <td style="text-align:right;color:var(--mu)">${o.c}</td>
+    <td style="text-align:right;font-variant-numeric:tabular-nums">${f0(o.c*o.k)}</td>
   </tr>`).join('')
-  +`<tr><td style="font-weight:600">Total estimado parcial</td><td></td><td style="text-align:right;font-weight:600">${f0(totOrg)}</td></tr>`;
+  + `<tr style="border-top:1px solid var(--bd)">
+      <td style="font-weight:600">Total parcial estimado</td>
+      <td colspan="2"></td>
+      <td style="text-align:right;font-weight:600">${f0(totOrg)}${cobertura?` <span style="font-size:9px;color:var(--mu)">${f1(cobertura)}% TMB</span>`:''}</td>
+    </tr>`;
 
   // ── CENÁRIOS E PROJEÇÕES — switch por objetivo ──
   const metaG=num('meta-gord')||21, kcalLBM=num('meta-kcal-lbm')||32;
@@ -1452,39 +1558,171 @@ function atualizarGET(ctx) {
     return renderChart();
   }
 
-  // cut (padrão)
-  const gPerder=num('meta-gord-kg')||0, dias=num('meta-dias')||60;
-  const defDia=gPerder>0?gPerder*7700/dias:0;
-  const intv=kcalLBM*mlg, hipI=get-defDia, hipII=get-defDia*2;
-  const novoGPct=gPerder>0?(gordKg-gPerder)/(massa-gPerder)*100:gordPct;
+  // ══════════════════════════════════════════════════════════════════
+  // CUT — Modelo Dinâmico (Hall 2011 + Forbes 1987 + Alpert 2005)
+  // ══════════════════════════════════════════════════════════════════
+  const gPerder  = num('meta-gord-kg') || 0;
+  const kcalLBM2 = num('meta-kcal-lbm') || 32;
+  const ritmo    = el('meta-ritmo')?.value || 'moderado';
+  const gordPctAtual = gordKg / massa * 100;
 
-  el('cenarios-wrap').innerHTML=[
-    {n:'Normocalórica',d:'Manutenção do peso atual',k:get,on:false,c:'var(--tl)'},
-    {n:'Intervenção (kcal/MLG)',d:`${kcalLBM} kcal × ${f1(mlg)} kg MLG`,k:intv,on:true,c:'var(--ac)'},
-    {n:`Hipocalórica I — −${f0(defDia)} kcal/dia`,d:`Perda de ${f1(gPerder)} kg de gordura em ${dias} dias`,k:hipI,on:false,c:'var(--am)'},
-    {n:'Hipocalórica II — déficit duplo',d:`Perda estimada ${f1(gPerder*2)} kg em ${dias} dias`,k:hipII,on:false,c:'var(--rs)'},
+  // ── Déficit base ──
+  let defDia;
+  if (ritmo === 'manual') {
+    defDia = num('meta-deficit') || 500;
+  } else {
+    const ppMes = RITMO_PP[ritmo] || 1.0;
+    defDia = (ppMes / 100 * massa * 7700) / 30;
+  }
+
+  // ── Taxa máxima de oxidação de gordura — Alpert (2005) ──
+  // FM × 290 kcal/dia = limite biológico de mobilização de gordura
+  const defMaxAlpert  = gordKg * 290;
+  const defMaxSeguro  = Math.min(defMaxAlpert, get * 0.40,
+                          get - (sexo === 'F' ? 1200 : 1500));
+  const defAlertado   = defDia > defMaxSeguro;
+
+  // ── Forbes partitioning: fração gordura/MLG na perda ──
+  // Hall (2008): dMLG/dBW = C / (FM + C), C = 10.4 kg
+  const C_FORBES    = 10.4;
+  const fracGord    = gordKg / (gordKg + C_FORBES);  // fração da perda que será gordura
+  const fracMLG     = 1 - fracGord;
+  const mlgPerdida  = gPerder > 0 ? gPerder * fracMLG  : 0;
+  const gordPerdidaReal = gPerder > 0 ? gPerder * fracGord : 0;
+
+  // ── Simulação dinâmica — integração Euler diária ──
+  // Gera trajetória semana a semana com adaptação metabólica
+  function simularTrajetoria(bw0, fm0, get0, ingestao, maxDias) {
+    const C = 10.4;
+    let bw = bw0, fm = fm0, mlgSim = bw0 - fm0;
+    const pts = [{ dia: 0, peso: bw, gord: fm, mlg: mlgSim, bf: fm/bw*100, get: get0 }];
+    for (let d = 1; d <= maxDias; d++) {
+      const getAtual = get0 * Math.pow(bw / bw0, 0.75);
+      const def = getAtual - ingestao;
+      if (def > 0) {
+        const fg = fm / (fm + C);
+        const dFm  = (def * fg)  / 9400;   // gordura: 9.4 kcal/g
+        const dMlg = (def * (1-fg)) / 1800; // MLG mix: ~1.8 kcal/g
+        fm  = Math.max(0.5, fm  - dFm);
+        mlgSim = Math.max(10, mlgSim - dMlg);
+      } else {
+        fm  += Math.abs(def) * 0.3 / 9400;
+        mlgSim += Math.abs(def) * 0.7 / 1800;
+      }
+      bw = fm + mlgSim;
+      if (d % 7 === 0 || d === maxDias) {
+        pts.push({ dia: d, peso: +bw.toFixed(2), gord: +fm.toFixed(2),
+                   mlg: +mlgSim.toFixed(2), bf: +(fm/bw*100).toFixed(1),
+                   get: +getAtual.toFixed(0) });
+      }
+    }
+    return pts;
+  }
+
+  // Prazo dinâmico: simula até atingir meta de gordura
+  let diasSim = null;
+  if (gPerder > 0 && defDia > 0) {
+    const ingestaSim = get - defDia;
+    const trajTest   = simularTrajetoria(massa, gordKg, get, ingestaSim, 365);
+    const metaFm     = gordKg - gPerder;
+    const pontoMeta  = trajTest.find(p => p.gord <= metaFm);
+    diasSim = pontoMeta ? pontoMeta.dia : null;
+  }
+
+  // Prazo linear simples (para comparação)
+  const diasLinear = gPerder > 0 && defDia > 0
+    ? Math.round((gPerder * 7700) / defDia) : null;
+
+  // Armazena trajetória para o gráfico
+  window._simTraj = gPerder > 0 && defDia > 0
+    ? simularTrajetoria(massa, gordKg, get, get - defDia, diasSim ? diasSim + 14 : 120)
+    : null;
+
+  // ── Projeção do estado final (Forbes-ajustado) ──
+  const pesoFinal  = massa - gPerder;
+  const gordFinal  = Math.max(0, gordKg - gordPerdidaReal);
+  const mlgFinal   = mlg - mlgPerdida;
+  const bfFinal    = gordFinal / pesoFinal * 100;
+
+  // ── GET e ingestão de manutenção pós-meta (Hall 2008) ──
+  // Adaptive thermogenesis: ~5 kcal/dia por % de peso perdido
+  const pctPeso    = gPerder / massa * 100;
+  const penalThermo = pctPeso * 5;
+  const getManut   = get * Math.pow(pesoFinal / massa, 0.75) - penalThermo;
+  const intestaManut = Math.max(getManut, sexo === 'F' ? 1200 : 1500);
+
+  const prazoLabel = diasSim
+    ? `${diasSim} dias (dinâmico)` : diasLinear
+    ? `${diasLinear} dias (linear)` : '—';
+
+  const ritmoLabels = {
+    conservador: ['Conservador', 'var(--tl)'],
+    moderado:    ['Moderado',    'var(--gn)'],
+    agressivo:   ['Agressivo',   'var(--am)'],
+    manual: defDia < 300 ? ['Conservador','var(--tl)']
+           : defDia < 600 ? ['Moderado','var(--gn)']
+           : defDia < 900 ? ['Agressivo','var(--am)']
+           : ['Muito agressivo','var(--rs)'],
+  };
+  const [ritmoLbl, ritmoCor] = Array.isArray(ritmoLabels[ritmo])
+    ? ritmoLabels[ritmo] : ritmoLabels.manual;
+
+  const rlEl = el('ritmo-label');
+  if (rlEl) { rlEl.textContent = `${f0(defDia)} kcal/dia`; rlEl.style.color = ritmoCor; }
+
+  const intv = kcalLBM2 * mlg;
+  el('cenarios-wrap').innerHTML = [
+    { n:'Normocalórica',          d:'Manutenção do peso atual',                     k:get,   on:false, c:'var(--tl)' },
+    { n:'Intervenção (kcal/MLG)', d:`${kcalLBM2} kcal × ${f1(mlg)} kg MLG`,        k:intv,  on:true,  c:'var(--ac)' },
+    { n:`Hipocalórica — ${ritmoLbl}`,
+                                  d:`−${f0(defDia)} kcal/dia → ${prazoLabel}`,
+                                                                                    k:get-defDia, on:false, c:ritmoCor },
+    { n:'Manutenção pós-meta',    d:`GET reduzido após atingir ${f1(pesoFinal)} kg`, k:f0(intestaManut), on:false, c:'var(--purple)' },
   ].map(c=>`<div class="scen ${c.on?'on':''}">
     <div><div class="sname" style="color:${c.c}">${c.n}</div><div class="sdesc">${c.d}</div></div>
     <div style="text-align:right"><div class="skcal" style="color:${c.c}">${f0(c.k)}</div><div class="sunit">kcal/dia</div></div>
   </div>`).join('');
 
-  // Ritmo clínico do déficit
-  const ritmoCls = defDia < 200 ? ['Conservador', 'var(--tl)']
-                 : defDia < 500 ? ['Moderado', 'var(--gn)']
-                 : defDia < 800 ? ['Agressivo', 'var(--am)']
-                 : ['Muito agressivo', 'var(--rs)'];
+  // Alertas Alpert
+  const ws = validarDef(get-defDia, get, sexo);
+  if (defAlertado) ws.push(`Déficit (${f0(defDia)} kcal) próximo do limite biológico de oxidação de gordura para FM=${f1(gordKg)}kg (Alpert: ${f0(defMaxAlpert)} kcal/dia).`);
 
-  el('projecoes-wrap').innerHTML=`
-    <div class="srow"><span class="slbl">Déficit diário<small>Energia a menos por dia</small></span><span class="sval">${f0(defDia)} kcal &nbsp;<span style="font-size:10px;color:${ritmoCls[1]}">${ritmoCls[0]}</span></span></div>
-    <div class="srow"><span class="slbl">Gordura a reduzir</span><span class="sval">${f1(gPerder)} kg</span></div>
-    <div class="srow"><span class="slbl">Prazo</span><span class="sval">${dias} dias</span></div>
-    <div class="srow"><span class="slbl">% Gordura projetado<small>Ao atingir a meta</small></span><span class="sval">${f1(novoGPct)}%</span></div>
-    <div class="srow"><span class="slbl">Peso projetado ao final</span><span class="sval">${f1(massa-gPerder)} kg</span></div>
-    <div class="srow" style="border:none"><span class="slbl">Tempo estimado para meta</span><span class="sval" style="color:var(--ac)">${defDia>0?f0(gPerder*7700/defDia)+' dias':'—'}</span></div>`;
+  el('projecoes-wrap').innerHTML = `
+    <div class="srow">
+      <span class="slbl">Déficit diário<small>${ritmoLbl}</small></span>
+      <span class="sval">${f0(defDia)} kcal <span style="font-size:10px;color:${ritmoCor}">${ritmoLbl}</span></span>
+    </div>
+    <div class="srow">
+      <span class="slbl">Taxa máx. oxidação gordura<small>Alpert (2005) — limite biológico</small></span>
+      <span class="sval" style="color:${defDia > defMaxAlpert?'var(--rs)':'var(--tl)'}">${f0(defMaxAlpert)} kcal/dia</span>
+    </div>
+    <div class="srow">
+      <span class="slbl">Gordura a reduzir</span>
+      <span class="sval">${f1(gPerder)} kg</span>
+    </div>
+    <div class="srow">
+      <span class="slbl">Forbes: gordura vs MLG perdida<small>Hall (2008) — FM=${f1(gordKg)}kg → ${f0(fracGord*100)}%G / ${f0(fracMLG*100)}%MLG</small></span>
+      <span class="sval">${f1(gordPerdidaReal)}kg G + <span style="color:var(--rs)">${f1(mlgPerdida)}kg MLG</span></span>
+    </div>
+    <div class="srow">
+      <span class="slbl">Prazo dinâmico<small>com adaptação metabólica (Hall 2011)</small></span>
+      <span class="sval" style="color:var(--ac)">${diasSim ? diasSim+' dias' : '—'}</span>
+    </div>
+    <div class="srow">
+      <span class="slbl">% Gordura projetado<small>Forbes-ajustado</small></span>
+      <span class="sval">${f1(bfFinal)}%</span>
+    </div>
+    <div class="srow">
+      <span class="slbl">Peso final / MLG final</span>
+      <span class="sval">${f1(pesoFinal)} kg / ${f1(mlgFinal)} kg MLG</span>
+    </div>
+    <div class="srow" style="border:none">
+      <span class="slbl">Ingestão manutenção pós-meta<small>GET reduzido + adaptive thermogenesis (Hall 2012)</small></span>
+      <span class="sval" style="color:var(--purple)">${f0(intestaManut)} kcal/dia</span>
+    </div>`;
 
-  const ws=validarDef(hipI,get,sexo);
-  const wEl=el('warn-deficit');
-  if(ws.length){wEl.style.display='block';wEl.innerHTML='<strong>Atenção:</strong> '+ws.join(' ');}
+  const wEl = el('warn-deficit');
+  if (ws.length) { wEl.style.display='block'; wEl.innerHTML='<strong>Atenção:</strong> '+ws.join(' '); }
   else wEl.style.display='none';
 
   renderChart();
@@ -1522,28 +1760,148 @@ function addHist(){histData.push({data:'',peso:0,gord:0,musculo:0});renderHistRo
 function removeHist(i){histData.splice(i,1);renderHistRows();}
 
 function renderChart() {
-  const svg=el('chart'); if(!svg)return;
-  const W=svg.parentElement.clientWidth-8, H=230;
-  const P={t:16,r:14,b:44,l:40};
-  const iW=W-P.l-P.r, iH=H-P.t-P.b;
-  const data=histData.filter(h=>h.peso>0);
-  if (data.length<2){svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#64748b" font-size="11">Adicione ao menos 2 pontos.</text>`;return;}
-  const series=[{key:'peso',label:'Peso (kg)',color:'#3b82f6',dash:false},{key:'musculo',label:'Músculo (kg)',color:'#22c55e',dash:false},{key:'gord',label:'% Gordura',color:'#f43f5e',dash:true}];
-  const allV=data.flatMap(d=>[d.peso,d.musculo,d.gord]);
-  const minV=Math.floor(Math.min(...allV)*0.88), maxV=Math.ceil(Math.max(...allV)*1.08);
-  const xS=i=>P.l+(i/(data.length-1))*iW, yS=v=>P.t+iH-((v-minV)/(maxV-minV))*iH;
-  let grid='',xL='',paths='',dots='',leg='';
-  for(let g=0;g<=5;g++){const y=P.t+(g/5)*iH,v=maxV-g*(maxV-minV)/5;grid+=`<line x1="${P.l}" y1="${y}" x2="${P.l+iW}" y2="${y}" stroke="#252e40" stroke-width="1"/><text x="${P.l-5}" y="${y+4}" text-anchor="end" fill="#64748b" font-size="9">${v.toFixed(0)}</text>`;}
-  data.forEach((d,i)=>{xL+=`<text x="${xS(i)}" y="${P.t+iH+14}" text-anchor="middle" fill="#64748b" font-size="9">${d.data}</text>`;});
-  series.forEach(s=>{
-    const dA=data.map((d,i)=>`${i===0?'M':'L'}${xS(i).toFixed(1)} ${yS(d[s.key]).toFixed(1)}`).join(' ');
-    if(s.key==='peso'){const a=dA+` L${xS(data.length-1)} ${P.t+iH} L${xS(0)} ${P.t+iH} Z`;paths+=`<path d="${a}" fill="${s.color}" fill-opacity="0.05"/>`;}
-    paths+=`<path d="${dA}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5,3"':''} stroke-linecap="round"/>`;
-    data.forEach((d,i)=>{const x=xS(i),y=yS(d[s.key]);dots+=`<circle cx="${x}" cy="${y}" r="4" fill="${s.color}" fill-opacity="0.2" stroke="${s.color}" stroke-width="1.5"/><text x="${x}" y="${y-8}" text-anchor="middle" fill="${s.color}" font-size="9" font-weight="600">${(+d[s.key]).toFixed(1)}</text>`;});
+  const svg = el('chart'); if (!svg) return;
+  const W = svg.parentElement.clientWidth - 8, H = 260;
+  const P = { t:16, r:14, b:46, l:42 };
+  const iW = W - P.l - P.r, iH = H - P.t - P.b;
+
+  const data = histData.filter(h => h.peso > 0);
+  const hasSim = window._simTraj && window._simTraj.length > 1;
+
+  if (data.length < 1 && !hasSim) {
+    svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#64748b" font-size="11">Adicione pontos históricos ou calcule uma meta.</text>`;
+    return;
+  }
+
+  // Coleta todos os valores para escala
+  const histVals = data.flatMap(d => [d.peso, d.musculo, d.gord]);
+  const simVals  = hasSim ? window._simTraj.flatMap(p => [p.peso, p.gord]) : [];
+  const allV     = [...histVals, ...simVals].filter(v => !isNaN(v) && v > 0);
+  if (!allV.length) return;
+
+  const minV = Math.floor(Math.min(...allV) * 0.88);
+  const maxV = Math.ceil(Math.max(...allV) * 1.10);
+
+  // Escala X: combina datas históricas + dias de simulação
+  // Unifica em eixo numérico de dias relativos ao primeiro ponto
+  let allDias = [];
+  let diaOffset = 0;
+
+  if (data.length > 0) {
+    // Converte datas históricas em dias relativos
+    const parseDate = s => {
+      if (!s) return null;
+      const p = s.split('/');
+      if (p.length === 3) return new Date(+p[2], +p[1]-1, +p[0]);
+      return new Date(s);
+    };
+    const d0 = parseDate(data[0].data);
+    allDias = data.map(d => {
+      const dt = parseDate(d.data);
+      return dt && d0 ? Math.round((dt - d0) / 86400000) : 0;
+    });
+    diaOffset = allDias[allDias.length - 1] || 0;
+  }
+
+  const totalSpan = diaOffset + (hasSim ? window._simTraj[window._simTraj.length-1].dia : 0);
+  const xS = dia => P.l + (totalSpan > 0 ? (dia / totalSpan) : 0) * iW;
+  const yS = v   => P.t + iH - ((v - minV) / (maxV - minV)) * iH;
+
+  let grid = '', xL = '', paths = '', dots = '', leg = '', band = '';
+
+  // Grid
+  for (let g = 0; g <= 5; g++) {
+    const y = P.t + (g/5)*iH, v = maxV - g*(maxV-minV)/5;
+    grid += `<line x1="${P.l}" y1="${y}" x2="${P.l+iW}" y2="${y}" stroke="#252e40" stroke-width="1"/>
+             <text x="${P.l-5}" y="${y+4}" text-anchor="end" fill="#64748b" font-size="9">${v.toFixed(0)}</text>`;
+  }
+
+  // ── Curva de simulação dinâmica (projeção) ──
+  if (hasSim) {
+    const traj = window._simTraj;
+    const xOff = diaOffset;
+
+    // Banda de confiança ±10% (incerteza de adesão e variabilidade individual)
+    const upperPeso = traj.map(p => ({ dia: p.dia+xOff, v: p.peso * 1.04 }));
+    const lowerPeso = traj.map(p => ({ dia: p.dia+xOff, v: p.peso * 0.96 }));
+    const bandPath = upperPeso.map((p,i) => `${i===0?'M':'L'}${xS(p.dia).toFixed(1)} ${yS(p.v).toFixed(1)}`).join(' ')
+      + ' ' + lowerPeso.slice().reverse().map(p => `L${xS(p.dia).toFixed(1)} ${yS(p.v).toFixed(1)}`).join(' ') + ' Z';
+    band += `<path d="${bandPath}" fill="#3b82f6" fill-opacity="0.08"/>`;
+
+    // Linha de peso simulado
+    const pesoPath = traj.map((p,i) => `${i===0?'M':'L'}${xS(p.dia+xOff).toFixed(1)} ${yS(p.peso).toFixed(1)}`).join(' ');
+    paths += `<path d="${pesoPath}" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>`;
+
+    // Linha de BF simulado
+    const bfPath = traj.map((p,i) => `${i===0?'M':'L'}${xS(p.dia+xOff).toFixed(1)} ${yS(p.bf).toFixed(1)}`).join(' ');
+    paths += `<path d="${bfPath}" fill="none" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>`;
+
+    // Marcador do ponto final
+    const last = traj[traj.length-1];
+    const lx = xS(last.dia+xOff), ly = yS(last.peso);
+    dots += `<circle cx="${lx}" cy="${ly}" r="5" fill="#3b82f6" fill-opacity="0.3" stroke="#3b82f6" stroke-width="2"/>
+             <text x="${lx}" y="${ly-10}" text-anchor="middle" fill="#3b82f6" font-size="9" font-weight="600">${last.peso.toFixed(1)}</text>`;
+
+    // Labels X simulação
+    [0, Math.round(traj.length/3), Math.round(traj.length*2/3), traj.length-1].forEach(i => {
+      if (!traj[i]) return;
+      const dx = xS(traj[i].dia + xOff);
+      xL += `<text x="${dx}" y="${P.t+iH+14}" text-anchor="middle" fill="#3b82f6" font-size="8" opacity="0.7">d${traj[i].dia}</text>`;
+    });
+  }
+
+  // ── Dados históricos ──
+  if (data.length >= 2) {
+    const series = [
+      { key:'peso',    label:'Peso (kg)',    color:'#3b82f6', dash:false },
+      { key:'musculo', label:'Músculo (kg)', color:'#22c55e', dash:false },
+      { key:'gord',    label:'%G',           color:'#f43f5e', dash:true  },
+    ];
+    series.forEach(s => {
+      const dA = data.map((d,i) => `${i===0?'M':'L'}${xS(allDias[i]).toFixed(1)} ${yS(d[s.key]).toFixed(1)}`).join(' ');
+      if (s.key==='peso') {
+        const a = dA + ` L${xS(allDias[data.length-1])} ${P.t+iH} L${xS(0)} ${P.t+iH} Z`;
+        paths += `<path d="${a}" fill="${s.color}" fill-opacity="0.05"/>`;
+      }
+      paths += `<path d="${dA}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5,3"':''} stroke-linecap="round"/>`;
+      data.forEach((d,i) => {
+        const x = xS(allDias[i]), y = yS(d[s.key]);
+        dots += `<circle cx="${x}" cy="${y}" r="4" fill="${s.color}" fill-opacity="0.25" stroke="${s.color}" stroke-width="1.5"/>
+                 <text x="${x}" y="${y-8}" text-anchor="middle" fill="${s.color}" font-size="9" font-weight="600">${(+d[s.key]).toFixed(1)}</text>`;
+      });
+    });
+    data.forEach((d,i) => {
+      xL += `<text x="${xS(allDias[i])}" y="${P.t+iH+24}" text-anchor="middle" fill="#64748b" font-size="8">${d.data}</text>`;
+    });
+  }
+
+  // Legenda
+  const legendItems = [
+    { label:'Peso histórico', color:'#3b82f6', dash:false },
+    { label:'Músculo (kg)',   color:'#22c55e', dash:false },
+    { label:'%G histórico',   color:'#f43f5e', dash:true  },
+  ];
+  if (hasSim) {
+    legendItems.push({ label:'Simulação (peso)', color:'#3b82f6', dash:true, faded:true });
+    legendItems.push({ label:'Simulação (%G)',   color:'#f43f5e', dash:true, faded:true });
+  }
+  legendItems.forEach((s,i) => {
+    const lx = P.l + i * Math.min(iW/legendItems.length, 80);
+    leg += `<line x1="${lx}" y1="${H-6}" x2="${lx+12}" y2="${H-6}"
+              stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="4,3"':''} opacity="${s.faded?0.6:1}"/>
+            <text x="${lx+15}" y="${H-2}" fill="#94a3b8" font-size="8" opacity="${s.faded?0.7:1}">${s.label}</text>`;
   });
-  series.forEach((s,i)=>{const lx=P.l+i*(iW/3);leg+=`<line x1="${lx}" y1="${H-6}" x2="${lx+14}" y2="${H-6}" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="4,3"':''}/><text x="${lx+18}" y="${H-2}" fill="#94a3b8" font-size="9">${s.label}</text>`;});
-  svg.setAttribute('width',W); svg.setAttribute('height',H);
-  svg.innerHTML=`<g>${grid}</g><g>${paths}</g><g>${dots}</g><g>${xL}</g><g>${leg}</g>`;
+
+  // Linha divisória histórico/projeção
+  let divLine = '';
+  if (hasSim && data.length > 0) {
+    const xDiv = xS(diaOffset);
+    divLine = `<line x1="${xDiv}" y1="${P.t}" x2="${xDiv}" y2="${P.t+iH}" stroke="#3b82f6" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+               <text x="${xDiv+3}" y="${P.t+10}" fill="#3b82f6" font-size="8" opacity="0.6">hoje →</text>`;
+  }
+
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.innerHTML = `<g>${grid}</g><g>${band}</g><g>${divLine}</g><g>${paths}</g><g>${dots}</g><g>${xL}</g><g>${leg}</g>`;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1840,10 +2198,5 @@ renderEqGrid(null);
 desenharBoneco();
 window.addEventListener('resize', () => renderChart());
 </script>
-<footer style="text-align:center;padding:18px 0 24px;margin-top:32px;border-top:1px solid rgba(255,255,255,0.08);font-size:0.82rem;color:#6b8a8a;line-height:1.8;">
-  © 2026 Rafael Salomon. Todos os direitos reservados.<br>
-  Uso restrito a pacientes em acompanhamento. Reprodução ou distribuição proibidas.<br>
-  Nutricionista CRN-1 16.718 &bull; (61) 99566-2828 &bull; rafaelsalomon@gmail.com
-</footer>
 </body>
 </html>
