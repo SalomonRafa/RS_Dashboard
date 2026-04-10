@@ -813,27 +813,44 @@ svg text{font-family:'DM Sans',sans-serif}
   </div>
 </div>
 
-<!-- ══ BLOCO 7: HISTÓRICO ══════════════════════════════════════════════════ -->
-<div class="stitle mt26">Histórico Evolutivo</div>
-<div class="g12">
+<!-- ══ BLOCO 7: HISTÓRICO E COMPARATIVO ══════════════════════════════════════ -->
+<div class="stitle mt26">Histórico Evolutivo e Comparativo de Avaliações</div>
+<div style="display:grid;grid-template-columns:280px 1fr;gap:12px">
+
+  <!-- Entradas -->
   <div class="card">
-    <div class="clbl">Avaliações</div>
+    <div class="clbl">Avaliações cadastradas</div>
     <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 28px;gap:4px;margin-bottom:6px">
       <span style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em">Data</span>
       <span style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em">Peso</span>
       <span style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em">%G</span>
-      <span style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em">Músculo</span>
+      <span style="font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em">Musc.</span>
       <span></span>
     </div>
     <div id="hist-rows"></div>
     <div style="display:flex;gap:7px;margin-top:8px">
       <button class="btn bs bsm" onclick="addHist()" style="flex:1">+ Ponto</button>
-      <button class="btn bp2 bsm" onclick="renderChart()" style="flex:1">Atualizar gráfico</button>
+      <button class="btn bp2 bsm" onclick="renderChart()" style="flex:1">Atualizar</button>
+    </div>
+    <!-- Painel de comparativo entre dois pontos -->
+    <div id="comp-panel" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)">
+      <div style="font-size:10px;font-weight:700;color:var(--lb);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Comparativo</div>
+      <div id="comp-content"></div>
     </div>
   </div>
-  <div class="card">
-    <div class="clbl">Evolução da Composição Corporal</div>
-    <svg id="chart" width="100%" height="240" style="overflow:visible;margin-top:6px"></svg>
+
+  <!-- Gráfico -->
+  <div class="card" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="clbl" style="margin-bottom:0">Evolução da Composição Corporal</div>
+      <div class="tabs" style="width:auto">
+        <button id="chart-tab-bar"  class="tab on"  onclick="setChartMode('bar')">Barras</button>
+        <button id="chart-tab-line" class="tab"     onclick="setChartMode('line')">Linhas</button>
+        <button id="chart-tab-sim"  class="tab"     onclick="setChartMode('sim')">Projeção</button>
+      </div>
+    </div>
+    <svg id="chart" width="100%" height="260" style="overflow:visible"></svg>
+    <div id="chart-insight" style="font-size:11px;color:var(--lb);line-height:1.6;padding:8px 12px;background:var(--sf2);border-radius:7px;display:none"></div>
   </div>
 </div>
 
@@ -847,6 +864,13 @@ let eqSel = 'cunningham', etaVal = 10, exModo = 'pct';
 let metaSel = null; // atividade MET selecionada
 
 let histData = [];
+let chartMode = 'bar'; // 'bar' | 'line' | 'sim'
+
+function setChartMode(m) {
+  chartMode = m;
+  ['bar','line','sim'].forEach(x => el(`chart-tab-${x}`)?.classList.toggle('on', m===x));
+  renderChart();
+}
 
 // ══════════════════════════════════════════════════════════════════
 // UTILITÁRIOS
@@ -1747,161 +1771,258 @@ function renderCmpTMB(vals) {
 // HISTÓRICO
 // ══════════════════════════════════════════════════════════════════
 function renderHistRows() {
-  el('hist-rows').innerHTML=histData.map((h,i)=>`
-    <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 26px;gap:4px;margin-bottom:4px">
-      <input class="i" style="font-size:10px;padding:5px 7px" value="${h.data}" onchange="histData[${i}].data=this.value">
-      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.peso}" onchange="histData[${i}].peso=parseFloat(this.value)">
-      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.gord}" onchange="histData[${i}].gord=parseFloat(this.value)">
-      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.musculo}" onchange="histData[${i}].musculo=parseFloat(this.value)">
+  el('hist-rows').innerHTML = histData.map((h,i) => `
+    <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 28px;gap:4px;margin-bottom:4px">
+      <input class="i" style="font-size:10px;padding:5px 7px" value="${h.data}" onchange="histData[${i}].data=this.value;renderComparativo()">
+      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.peso}" onchange="histData[${i}].peso=parseFloat(this.value);renderComparativo()">
+      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.gord}" onchange="histData[${i}].gord=parseFloat(this.value);renderComparativo()">
+      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.musculo}" onchange="histData[${i}].musculo=parseFloat(this.value);renderComparativo()">
       <button class="btn bs" style="padding:5px;font-size:10px" onclick="removeHist(${i})">✕</button>
     </div>`).join('');
+  renderComparativo();
 }
-function addHist(){histData.push({data:'',peso:0,gord:0,musculo:0});renderHistRows();}
-function removeHist(i){histData.splice(i,1);renderHistRows();}
+function addHist(){ histData.push({data:'',peso:0,gord:0,musculo:0}); renderHistRows(); }
+function removeHist(i){ histData.splice(i,1); renderHistRows(); renderChart(); }
 
+// ── Painel comparativo e insight textual ──────────────────────────
+function renderComparativo() {
+  const data = histData.filter(h => h.peso > 0);
+  const panel = el('comp-panel');
+  const content = el('comp-content');
+  if (!panel || !content) return;
+  if (data.length < 2) { panel.style.display = 'none'; return; }
+
+  const a = data[0], b = data[data.length-1];
+  const dp = b.peso - a.peso;
+  const dg = b.gord - a.gord;
+  const dm = b.musculo - a.musculo;
+
+  const delta = (v, inv=false) => {
+    if (Math.abs(v) < 0.05) return `<span style="color:var(--mu)">±0</span>`;
+    const good = inv ? v < 0 : v > 0;
+    const col = good ? 'var(--gn)' : 'var(--rs)';
+    return `<span style="color:${col}">${v > 0 ? '+' : ''}${v.toFixed(1)}</span>`;
+  };
+
+  content.innerHTML = `
+    <div class="srow"><span class="slbl">Peso</span><span class="sval">${a.peso}→${b.peso}kg ${delta(dp,true)}</span></div>
+    <div class="srow"><span class="slbl">% Gordura</span><span class="sval">${a.gord}→${b.gord}% ${delta(dg,true)}</span></div>
+    <div class="srow" style="border:none"><span class="slbl">Músculo</span><span class="sval">${a.musculo}→${b.musculo}kg ${delta(dm)}</span></div>`;
+  panel.style.display = 'block';
+
+  // Insight textual para o gráfico
+  const insight = el('chart-insight');
+  if (!insight) return;
+  const nome = el('fx-nome')?.value?.split(' ')[0] || 'Você';
+  const msgs = [];
+  if (dp < -0.3) msgs.push(`O peso corporal reduziu <strong>${Math.abs(dp).toFixed(1)} kg</strong> no período avaliado.`);
+  else if (dp > 0.3) msgs.push(`O peso corporal aumentou <strong>${dp.toFixed(1)} kg</strong>.`);
+  if (dg < -0.3) msgs.push(`O percentual de gordura caiu <strong>${Math.abs(dg).toFixed(1)}%</strong> — isso é um marcador positivo de recomposição.`);
+  else if (dg > 0.3) msgs.push(`O percentual de gordura subiu <strong>${dg.toFixed(1)}%</strong>. Isso merece atenção no próximo ciclo.`);
+  if (dm > 0.2) msgs.push(`A massa muscular ganhou <strong>${dm.toFixed(1)} kg</strong> — excelente resultado para preservação e performance.`);
+  else if (dm < -0.2) msgs.push(`A massa muscular reduziu <strong>${Math.abs(dm).toFixed(1)} kg</strong>. Proteína e treino são prioridade.`);
+  if (dp < -0.1 && dm > 0.1) msgs.push(`Perda de gordura com ganho simultâneo de músculo é o melhor cenário possível em recomposição corporal.`);
+  if (msgs.length) {
+    insight.style.display = 'block';
+    insight.innerHTML = `<strong style="color:var(--tx)">${nome}, aqui está o resumo da sua evolução:</strong> ` + msgs.join(' ');
+  } else {
+    insight.style.display = 'none';
+  }
+}
+
+// ── renderChart: suporta barras agrupadas, linhas e simulação ─────
 function renderChart() {
   const svg = el('chart'); if (!svg) return;
   const W = svg.parentElement.clientWidth - 8, H = 260;
-  const P = { t:16, r:14, b:46, l:42 };
+  const P = { t:20, r:14, b:50, l:44 };
   const iW = W - P.l - P.r, iH = H - P.t - P.b;
 
   const data = histData.filter(h => h.peso > 0);
   const hasSim = window._simTraj && window._simTraj.length > 1;
 
   if (data.length < 1 && !hasSim) {
-    svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#64748b" font-size="11">Adicione pontos históricos ou calcule uma meta.</text>`;
+    svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#64748b" font-size="11">Adicione avaliações acima para ver o gráfico.</text>`;
+    el('chart-insight').style.display = 'none';
     return;
   }
 
-  // Coleta todos os valores para escala
-  const histVals = data.flatMap(d => [d.peso, d.musculo, d.gord]);
-  const simVals  = hasSim ? window._simTraj.flatMap(p => [p.peso, p.gord]) : [];
-  const allV     = [...histVals, ...simVals].filter(v => !isNaN(v) && v > 0);
-  if (!allV.length) return;
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
 
-  const minV = Math.floor(Math.min(...allV) * 0.88);
-  const maxV = Math.ceil(Math.max(...allV) * 1.10);
+  // ── MODO BARRAS AGRUPADAS ──────────────────────────────────────
+  if (chartMode === 'bar') {
+    if (data.length < 1) {
+      svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#64748b" font-size="11">Adicione ao menos 1 avaliação.</text>`;
+      return;
+    }
+    const metrics = [
+      { key:'peso',    label:'Peso (kg)',    color:'#3b82f6' },
+      { key:'musculo', label:'Músculo (kg)', color:'#22c55e' },
+      { key:'gord',    label:'%G',           color:'#f43f5e' },
+    ];
+    const allVals = data.flatMap(d => metrics.map(m => d[m.key])).filter(v=>v>0);
+    const maxV = Math.ceil(Math.max(...allVals) * 1.12);
+    const minV = 0;
+    const yS = v => P.t + iH - ((v-minV)/(maxV-minV))*iH;
 
-  // Escala X: combina datas históricas + dias de simulação
-  // Unifica em eixo numérico de dias relativos ao primeiro ponto
-  let allDias = [];
-  let diaOffset = 0;
+    const nGroups = data.length;
+    const nBars   = metrics.length;
+    const groupW  = iW / nGroups;
+    const barW    = Math.min(groupW / (nBars + 1), 28);
+    const gap     = (groupW - barW * nBars) / (nBars + 1);
 
-  if (data.length > 0) {
-    // Converte datas históricas em dias relativos
-    const parseDate = s => {
-      if (!s) return null;
-      const p = s.split('/');
-      if (p.length === 3) return new Date(+p[2], +p[1]-1, +p[0]);
-      return new Date(s);
-    };
-    const d0 = parseDate(data[0].data);
-    allDias = data.map(d => {
-      const dt = parseDate(d.data);
-      return dt && d0 ? Math.round((dt - d0) / 86400000) : 0;
+    let grid = '', bars = '', labels = '', legend = '', vals = '';
+
+    // Grid
+    for (let g = 0; g <= 5; g++) {
+      const y = P.t + (g/5)*iH, v = maxV - g*(maxV-minV)/5;
+      grid += `<line x1="${P.l}" y1="${y}" x2="${P.l+iW}" y2="${y}" stroke="#252e40" stroke-width="1"/>
+               <text x="${P.l-5}" y="${y+4}" text-anchor="end" fill="#64748b" font-size="9">${v.toFixed(0)}</text>`;
+    }
+
+    // Bars
+    data.forEach((d, gi) => {
+      const gx = P.l + gi * groupW;
+      metrics.forEach((m, bi) => {
+        const x = gx + gap + bi*(barW+gap/nBars);
+        const v = d[m.key] || 0;
+        const y = yS(v);
+        const h = P.t + iH - y;
+        // Barra com gradiente implícito via rects empilhados
+        bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${Math.max(2,h).toFixed(1)}"
+          rx="3" fill="${m.color}" fill-opacity="${gi===data.length-1?0.9:0.5}"
+          stroke="${m.color}" stroke-width="${gi===data.length-1?1.5:0.5}" stroke-opacity="0.6"/>`;
+        // Valor acima da barra
+        vals += `<text x="${(x+barW/2).toFixed(1)}" y="${(y-4).toFixed(1)}" text-anchor="middle"
+          fill="${m.color}" font-size="8" font-weight="600" opacity="${gi===data.length-1?1:0.7}">${v.toFixed(1)}</text>`;
+        // Seta de delta entre primeira e última avaliação para a mesma métrica
+        if (data.length >= 2 && gi === data.length-1) {
+          const v0 = data[0][m.key] || 0;
+          const dv = v - v0;
+          if (Math.abs(dv) > 0.05) {
+            const arrowColor = (m.key === 'gord' ? dv < 0 : dv > 0) ? '#22c55e' : '#f43f5e';
+            const arrow = dv > 0 ? '▲' : '▼';
+            vals += `<text x="${(x+barW/2).toFixed(1)}" y="${(y-14).toFixed(1)}" text-anchor="middle"
+              fill="${arrowColor}" font-size="8" font-weight="700">${arrow}${Math.abs(dv).toFixed(1)}</text>`;
+          }
+        }
+      });
+      // Label data do grupo
+      labels += `<text x="${(gx+groupW/2).toFixed(1)}" y="${P.t+iH+14}" text-anchor="middle" fill="#94a3b8" font-size="9">${d.data||`#${gi+1}`}</text>`;
     });
-    diaOffset = allDias[allDias.length - 1] || 0;
-  }
 
-  const totalSpan = diaOffset + (hasSim ? window._simTraj[window._simTraj.length-1].dia : 0);
-  const xS = dia => P.l + (totalSpan > 0 ? (dia / totalSpan) : 0) * iW;
-  const yS = v   => P.t + iH - ((v - minV) / (maxV - minV)) * iH;
-
-  let grid = '', xL = '', paths = '', dots = '', leg = '', band = '';
-
-  // Grid
-  for (let g = 0; g <= 5; g++) {
-    const y = P.t + (g/5)*iH, v = maxV - g*(maxV-minV)/5;
-    grid += `<line x1="${P.l}" y1="${y}" x2="${P.l+iW}" y2="${y}" stroke="#252e40" stroke-width="1"/>
-             <text x="${P.l-5}" y="${y+4}" text-anchor="end" fill="#64748b" font-size="9">${v.toFixed(0)}</text>`;
-  }
-
-  // ── Curva de simulação dinâmica (projeção) ──
-  if (hasSim) {
-    const traj = window._simTraj;
-    const xOff = diaOffset;
-
-    // Banda de confiança ±10% (incerteza de adesão e variabilidade individual)
-    const upperPeso = traj.map(p => ({ dia: p.dia+xOff, v: p.peso * 1.04 }));
-    const lowerPeso = traj.map(p => ({ dia: p.dia+xOff, v: p.peso * 0.96 }));
-    const bandPath = upperPeso.map((p,i) => `${i===0?'M':'L'}${xS(p.dia).toFixed(1)} ${yS(p.v).toFixed(1)}`).join(' ')
-      + ' ' + lowerPeso.slice().reverse().map(p => `L${xS(p.dia).toFixed(1)} ${yS(p.v).toFixed(1)}`).join(' ') + ' Z';
-    band += `<path d="${bandPath}" fill="#3b82f6" fill-opacity="0.08"/>`;
-
-    // Linha de peso simulado
-    const pesoPath = traj.map((p,i) => `${i===0?'M':'L'}${xS(p.dia+xOff).toFixed(1)} ${yS(p.peso).toFixed(1)}`).join(' ');
-    paths += `<path d="${pesoPath}" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>`;
-
-    // Linha de BF simulado
-    const bfPath = traj.map((p,i) => `${i===0?'M':'L'}${xS(p.dia+xOff).toFixed(1)} ${yS(p.bf).toFixed(1)}`).join(' ');
-    paths += `<path d="${bfPath}" fill="none" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>`;
-
-    // Marcador do ponto final
-    const last = traj[traj.length-1];
-    const lx = xS(last.dia+xOff), ly = yS(last.peso);
-    dots += `<circle cx="${lx}" cy="${ly}" r="5" fill="#3b82f6" fill-opacity="0.3" stroke="#3b82f6" stroke-width="2"/>
-             <text x="${lx}" y="${ly-10}" text-anchor="middle" fill="#3b82f6" font-size="9" font-weight="600">${last.peso.toFixed(1)}</text>`;
-
-    // Labels X simulação
-    [0, Math.round(traj.length/3), Math.round(traj.length*2/3), traj.length-1].forEach(i => {
-      if (!traj[i]) return;
-      const dx = xS(traj[i].dia + xOff);
-      xL += `<text x="${dx}" y="${P.t+iH+14}" text-anchor="middle" fill="#3b82f6" font-size="8" opacity="0.7">d${traj[i].dia}</text>`;
+    // Legenda
+    metrics.forEach((m,i) => {
+      const lx = P.l + i * (iW/metrics.length);
+      legend += `<rect x="${lx}" y="${H-12}" width="10" height="10" rx="2" fill="${m.color}" fill-opacity="0.7"/>
+                 <text x="${lx+13}" y="${H-4}" fill="#94a3b8" font-size="9">${m.label}</text>`;
     });
+
+    svg.innerHTML = `<g>${grid}</g><g>${bars}</g><g>${vals}</g><g>${labels}</g><g>${legend}</g>`;
+    return;
   }
 
-  // ── Dados históricos ──
-  if (data.length >= 2) {
+  // ── MODO LINHAS (histórico) ───────────────────────────────────
+  if (chartMode === 'line') {
+    if (data.length < 2) {
+      svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#64748b" font-size="11">Adicione ao menos 2 pontos.</text>`;
+      return;
+    }
     const series = [
       { key:'peso',    label:'Peso (kg)',    color:'#3b82f6', dash:false },
       { key:'musculo', label:'Músculo (kg)', color:'#22c55e', dash:false },
       { key:'gord',    label:'%G',           color:'#f43f5e', dash:true  },
     ];
-    series.forEach(s => {
-      const dA = data.map((d,i) => `${i===0?'M':'L'}${xS(allDias[i]).toFixed(1)} ${yS(d[s.key]).toFixed(1)}`).join(' ');
-      if (s.key==='peso') {
-        const a = dA + ` L${xS(allDias[data.length-1])} ${P.t+iH} L${xS(0)} ${P.t+iH} Z`;
-        paths += `<path d="${a}" fill="${s.color}" fill-opacity="0.05"/>`;
-      }
-      paths += `<path d="${dA}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5,3"':''} stroke-linecap="round"/>`;
-      data.forEach((d,i) => {
-        const x = xS(allDias[i]), y = yS(d[s.key]);
-        dots += `<circle cx="${x}" cy="${y}" r="4" fill="${s.color}" fill-opacity="0.25" stroke="${s.color}" stroke-width="1.5"/>
-                 <text x="${x}" y="${y-8}" text-anchor="middle" fill="${s.color}" font-size="9" font-weight="600">${(+d[s.key]).toFixed(1)}</text>`;
-      });
+    const allV = data.flatMap(d => [d.peso, d.musculo, d.gord]).filter(v=>v>0);
+    const minV = Math.floor(Math.min(...allV)*0.88), maxV = Math.ceil(Math.max(...allV)*1.10);
+    const xS = i => P.l + (i/(data.length-1))*iW;
+    const yS = v => P.t + iH - ((v-minV)/(maxV-minV))*iH;
+    let grid='', paths='', dots='', xL='', leg='';
+    for (let g=0;g<=5;g++){const y=P.t+(g/5)*iH,v=maxV-g*(maxV-minV)/5;grid+=`<line x1="${P.l}" y1="${y}" x2="${P.l+iW}" y2="${y}" stroke="#252e40" stroke-width="1"/><text x="${P.l-5}" y="${y+4}" text-anchor="end" fill="#64748b" font-size="9">${v.toFixed(0)}</text>`;}
+    data.forEach((d,i)=>{ xL+=`<text x="${xS(i)}" y="${P.t+iH+14}" text-anchor="middle" fill="#94a3b8" font-size="9">${d.data||`#${i+1}`}</text>`; });
+    series.forEach(s=>{
+      const dA=data.map((d,i)=>`${i===0?'M':'L'}${xS(i).toFixed(1)} ${yS(d[s.key]).toFixed(1)}`).join(' ');
+      if(s.key==='peso'){paths+=`<path d="${dA} L${xS(data.length-1)} ${P.t+iH} L${xS(0)} ${P.t+iH} Z" fill="${s.color}" fill-opacity="0.05"/>`;}
+      paths+=`<path d="${dA}" fill="none" stroke="${s.color}" stroke-width="2.5" ${s.dash?'stroke-dasharray="5,3"':''} stroke-linecap="round"/>`;
+      data.forEach((d,i)=>{const x=xS(i),y=yS(d[s.key]);dots+=`<circle cx="${x}" cy="${y}" r="4.5" fill="${s.color}" fill-opacity="0.2" stroke="${s.color}" stroke-width="2"/><text x="${x}" y="${y-9}" text-anchor="middle" fill="${s.color}" font-size="9" font-weight="600">${(+d[s.key]).toFixed(1)}</text>`;});
     });
-    data.forEach((d,i) => {
-      xL += `<text x="${xS(allDias[i])}" y="${P.t+iH+24}" text-anchor="middle" fill="#64748b" font-size="8">${d.data}</text>`;
+    series.forEach((s,i)=>{const lx=P.l+i*(iW/3);leg+=`<line x1="${lx}" y1="${H-7}" x2="${lx+14}" y2="${H-7}" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="4,3"':''}/><text x="${lx+18}" y="${H-2}" fill="#94a3b8" font-size="9">${s.label}</text>`;});
+    svg.innerHTML=`<g>${grid}</g><g>${paths}</g><g>${dots}</g><g>${xL}</g><g>${leg}</g>`;
+    return;
+  }
+
+  // ── MODO SIMULAÇÃO ────────────────────────────────────────────
+  if (chartMode === 'sim') {
+    if (!hasSim) {
+      svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#64748b" font-size="11">Calcule uma meta de corte para ver a projeção.</text>`;
+      return;
+    }
+    const traj = window._simTraj;
+    const parseDate = s => { if (!s) return null; const p=s.split('/'); return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):new Date(s); };
+
+    // Histórico + projeção no mesmo eixo de dias
+    const histFiltered = data.filter(h=>h.peso>0);
+    let allDias = [], diaOffset = 0;
+    if (histFiltered.length > 0) {
+      const d0 = parseDate(histFiltered[0].data);
+      allDias = histFiltered.map(d=>{ const dt=parseDate(d.data); return dt&&d0?Math.round((dt-d0)/86400000):0; });
+      diaOffset = allDias[allDias.length-1] || 0;
+    }
+    const simMax = traj[traj.length-1].dia;
+    const totalSpan = diaOffset + simMax;
+    const allVals = [
+      ...histFiltered.flatMap(d=>[d.peso,d.gord]),
+      ...traj.flatMap(p=>[p.peso,p.bf])
+    ].filter(v=>v>0);
+    const minV=Math.floor(Math.min(...allVals)*0.85), maxV=Math.ceil(Math.max(...allVals)*1.10);
+    const xS = d => P.l + (totalSpan>0?(d/totalSpan):0)*iW;
+    const yS = v => P.t + iH - ((v-minV)/(maxV-minV))*iH;
+
+    let grid='', band='', paths='', dots='', xL='', leg='';
+
+    for(let g=0;g<=5;g++){const y=P.t+(g/5)*iH,v=maxV-g*(maxV-minV)/5;grid+=`<line x1="${P.l}" y1="${y}" x2="${P.l+iW}" y2="${y}" stroke="#252e40" stroke-width="1"/><text x="${P.l-5}" y="${y+4}" text-anchor="end" fill="#64748b" font-size="9">${v.toFixed(0)}</text>`;}
+
+    // Banda ±4%
+    const upper=traj.map(p=>({d:p.dia+diaOffset,v:p.peso*1.04}));
+    const lower=traj.map(p=>({d:p.dia+diaOffset,v:p.peso*0.96}));
+    const bp=upper.map((p,i)=>`${i===0?'M':'L'}${xS(p.d).toFixed(1)} ${yS(p.v).toFixed(1)}`).join(' ')
+      +' '+lower.slice().reverse().map(p=>`L${xS(p.d).toFixed(1)} ${yS(p.v).toFixed(1)}`).join(' ')+' Z';
+    band+=`<path d="${bp}" fill="#3b82f6" fill-opacity="0.07"/>`;
+
+    // Linhas sim
+    const simPeso=traj.map((p,i)=>`${i===0?'M':'L'}${xS(p.dia+diaOffset).toFixed(1)} ${yS(p.peso).toFixed(1)}`).join(' ');
+    const simBF=traj.map((p,i)=>`${i===0?'M':'L'}${xS(p.dia+diaOffset).toFixed(1)} ${yS(p.bf).toFixed(1)}`).join(' ');
+    paths+=`<path d="${simPeso}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="5,3" opacity="0.8"/>`;
+    paths+=`<path d="${simBF}" fill="none" stroke="#f43f5e" stroke-width="2" stroke-dasharray="5,3" opacity="0.8"/>`;
+
+    // Histórico
+    if (histFiltered.length>=2) {
+      const hp=histFiltered.map((d,i)=>`${i===0?'M':'L'}${xS(allDias[i]).toFixed(1)} ${yS(d.peso).toFixed(1)}`).join(' ');
+      paths+=`<path d="${hp}" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>`;
+      histFiltered.forEach((d,i)=>{const x=xS(allDias[i]),y=yS(d.peso);dots+=`<circle cx="${x}" cy="${y}" r="4" fill="#3b82f6" fill-opacity="0.3" stroke="#3b82f6" stroke-width="2"/><text x="${x}" y="${y-8}" text-anchor="middle" fill="#3b82f6" font-size="9" font-weight="600">${d.peso}</text>`;xL+=`<text x="${x}" y="${P.t+iH+24}" text-anchor="middle" fill="#64748b" font-size="8">${d.data}</text>`;});
+    }
+
+    // Marcador final sim
+    const last=traj[traj.length-1];
+    const lx=xS(last.dia+diaOffset), ly=yS(last.peso);
+    dots+=`<circle cx="${lx}" cy="${ly}" r="5" fill="#3b82f6" fill-opacity="0.25" stroke="#3b82f6" stroke-width="2"/>
+           <text x="${lx}" y="${(ly-10).toFixed(1)}" text-anchor="middle" fill="#3b82f6" font-size="9" font-weight="700">${last.peso.toFixed(1)}</text>`;
+    // Eixo X sim
+    [0, Math.round(traj.length/2), traj.length-1].forEach(i=>{
+      if(!traj[i])return;
+      const dx=xS(traj[i].dia+diaOffset);
+      xL+=`<text x="${dx}" y="${P.t+iH+14}" text-anchor="middle" fill="#3b82f6" font-size="8" opacity="0.7">d${traj[i].dia}</text>`;
     });
-  }
+    // Linha hoje
+    const xHoje = xS(diaOffset);
+    paths+=`<line x1="${xHoje}" y1="${P.t}" x2="${xHoje}" y2="${P.t+iH}" stroke="#3b82f6" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+            <text x="${xHoje+3}" y="${P.t+10}" fill="#3b82f6" font-size="8" opacity="0.6">hoje →</text>`;
 
-  // Legenda
-  const legendItems = [
-    { label:'Peso histórico', color:'#3b82f6', dash:false },
-    { label:'Músculo (kg)',   color:'#22c55e', dash:false },
-    { label:'%G histórico',   color:'#f43f5e', dash:true  },
-  ];
-  if (hasSim) {
-    legendItems.push({ label:'Simulação (peso)', color:'#3b82f6', dash:true, faded:true });
-    legendItems.push({ label:'Simulação (%G)',   color:'#f43f5e', dash:true, faded:true });
-  }
-  legendItems.forEach((s,i) => {
-    const lx = P.l + i * Math.min(iW/legendItems.length, 80);
-    leg += `<line x1="${lx}" y1="${H-6}" x2="${lx+12}" y2="${H-6}"
-              stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="4,3"':''} opacity="${s.faded?0.6:1}"/>
-            <text x="${lx+15}" y="${H-2}" fill="#94a3b8" font-size="8" opacity="${s.faded?0.7:1}">${s.label}</text>`;
-  });
+    const li=[{l:'Peso real',c:'#3b82f6',d:false},{l:'Peso simulado',c:'#3b82f6',d:true},{l:'%G simulado',c:'#f43f5e',d:true}];
+    li.forEach((s,i)=>{const lx2=P.l+i*(iW/3);leg+=`<line x1="${lx2}" y1="${H-7}" x2="${lx2+14}" y2="${H-7}" stroke="${s.c}" stroke-width="2" ${s.d?'stroke-dasharray="4,3"':''}/><text x="${lx2+18}" y="${H-2}" fill="#94a3b8" font-size="9">${s.l}</text>`;});
 
-  // Linha divisória histórico/projeção
-  let divLine = '';
-  if (hasSim && data.length > 0) {
-    const xDiv = xS(diaOffset);
-    divLine = `<line x1="${xDiv}" y1="${P.t}" x2="${xDiv}" y2="${P.t+iH}" stroke="#3b82f6" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
-               <text x="${xDiv+3}" y="${P.t+10}" fill="#3b82f6" font-size="8" opacity="0.6">hoje →</text>`;
+    svg.innerHTML=`<g>${grid}</g><g>${band}</g><g>${paths}</g><g>${dots}</g><g>${xL}</g><g>${leg}</g>`;
   }
-
-  svg.setAttribute('width', W); svg.setAttribute('height', H);
-  svg.innerHTML = `<g>${grid}</g><g>${band}</g><g>${divLine}</g><g>${paths}</g><g>${dots}</g><g>${xL}</g><g>${leg}</g>`;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2165,6 +2286,51 @@ function gerarHTMLRelatorio() {
     </div>
   </div>
 
+  <!-- SEÇÃO 5: EVOLUÇÃO COMPARATIVA (se histórico disponível) -->
+  ${(()=>{
+    const hd = histData.filter(h=>h.peso>0);
+    if (hd.length < 2) return '';
+    const a = hd[0], b = hd[hd.length-1];
+    const dp = (b.peso - a.peso).toFixed(1);
+    const dg = (b.gord - a.gord).toFixed(1);
+    const dm = (b.musculo - a.musculo).toFixed(1);
+    const arrow = (v, inv=false) => {
+      const n = parseFloat(v);
+      if (Math.abs(n)<0.05) return '<span style="color:#64748b">sem alteração</span>';
+      const bom = inv ? n<0 : n>0;
+      return `<span style="color:${bom?'#16a34a':'#dc2626'};font-weight:700">${n>0?'+':''}${v}</span>`;
+    };
+    const nomeP = nome.split(' ')[0];
+    // Gera texto interpretativo
+    const msgs = [];
+    const dpN = parseFloat(dp), dgN = parseFloat(dg), dmN = parseFloat(dm);
+    if (dpN < -0.3) msgs.push(`O peso corporal reduziu <strong>${Math.abs(dpN).toFixed(1)} kg</strong> no período — um resultado direto do trabalho realizado.`);
+    else if (dpN > 0.3) msgs.push(`O peso corporal aumentou <strong>${dpN.toFixed(1)} kg</strong>. Dependendo do contexto e do objetivo, isso pode refletir ganho de massa magra ou retenção.`);
+    if (dgN < -0.3) msgs.push(`O percentual de gordura reduziu <strong>${Math.abs(dgN).toFixed(1)} pontos percentuais</strong> — isso significa melhora direta na composição corporal.`);
+    else if (dgN > 0.3) msgs.push(`O percentual de gordura aumentou <strong>${dgN.toFixed(1)} pp</strong>. Esse dado merece atenção no próximo ciclo de trabalho.`);
+    if (dmN > 0.2) msgs.push(`A massa muscular aumentou <strong>${dmN.toFixed(1)} kg</strong> — um dos melhores resultados possíveis em termos de saúde metabólica e funcional.`);
+    else if (dmN < -0.2) msgs.push(`A massa muscular reduziu <strong>${Math.abs(dmN).toFixed(1)} kg</strong>. A preservação e o ganho de músculo devem ser priorizados na próxima fase.`);
+    if (dpN < -0.1 && dmN > 0.1) msgs.push(`Perda simultânea de gordura e ganho de músculo é o cenário mais desejado — chamamos isso de recomposição corporal.`);
+    return `
+    <div class="l-sec">
+      <div class="l-sec-title">&#128200; Evolução — Comparativo entre Avaliações</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+        <table class="l-tbl">
+          <thead><tr><th>Indicador</th><th>Avaliação 1<br><span style="font-weight:400;font-size:7pt">${a.data}</span></th><th>Avaliação atual<br><span style="font-weight:400;font-size:7pt">${b.data}</span></th><th>Variação</th></tr></thead>
+          <tbody>
+            <tr><td>Peso (kg)</td><td>${a.peso}</td><td class="hl">${b.peso}</td><td>${arrow(dp,true)}</td></tr>
+            <tr><td>% Gordura</td><td>${a.gord}%</td><td class="hl">${b.gord}%</td><td>${arrow(dg,true)}</td></tr>
+            <tr><td>Músculo (kg)</td><td>${a.musculo}</td><td class="hl">${b.musculo}</td><td>${arrow(dm)}</td></tr>
+          </tbody>
+        </table>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px">
+          <div style="font-size:8pt;font-weight:700;color:#1e293b;margin-bottom:6px">${nomeP}, o que esses números significam para você:</div>
+          <div style="font-size:8pt;color:#374151;line-height:1.7">${msgs.join(' ')}</div>
+        </div>
+      </div>
+    </div>`;
+  })()}
+
   ${notas.length?`<div class="l-note"><strong>Notas técnicas:</strong> ${notas.join('; ')}.</div>`:''}
   <div class="l-note" style="background:#f0fdf4;border-color:#bbf7d0;color:#14532d;margin-top:8px">
     Este relatório foi gerado com base nos dados inseridos e em equações preditivas validadas cientificamente. Os valores são estimativas — a precisão depende da qualidade dos dados de entrada e do método de avaliação utilizado. Este documento não substitui a consulta e o acompanhamento com o nutricionista.
@@ -2196,7 +2362,7 @@ atualizarHeader();
 renderHistRows();
 renderEqGrid(null);
 desenharBoneco();
-window.addEventListener('resize', () => renderChart());
+window.addEventListener('resize', () => { renderChart(); renderComparativo(); });
 </script>
 </body>
 </html>
