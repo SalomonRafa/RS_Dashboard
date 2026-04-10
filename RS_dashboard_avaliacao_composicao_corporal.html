@@ -851,17 +851,19 @@ svg text{font-family:'DM Sans',sans-serif}
 </div>
 
 <!-- ══ BOTÃO CALCULAR — BARRA FIXA NO FINAL ══════════════════════════════════ -->
-<div style="position:sticky;bottom:0;z-index:90;background:linear-gradient(to top,#0e1117 65%,transparent);padding:14px 28px 18px;margin-top:20px">
+<div style="position:fixed;bottom:0;left:0;right:0;z-index:200;background:linear-gradient(to top,rgba(14,17,23,0.97) 60%,transparent);padding:12px 28px 16px">
   <div style="max-width:1520px;margin:0 auto;display:flex;align-items:center;gap:10px">
     <div style="flex:1;font-size:11px;color:var(--mu)">
       Preencha os dados acima e clique para processar todos os cálculos.
     </div>
-    <button class="btn bs" onclick="limpar()" style="padding:12px 20px;font-size:12px">Limpar</button>
-    <button class="btn bp2" onclick="calcular()" style="padding:13px 32px;font-size:14px;font-weight:700;letter-spacing:.02em;box-shadow:0 4px 24px rgba(59,130,246,.4)">
+    <button class="btn bs" onclick="limpar()" style="padding:11px 20px;font-size:12px">Limpar</button>
+    <button class="btn bp2" onclick="calcular()" style="padding:12px 32px;font-size:14px;font-weight:700;letter-spacing:.02em;box-shadow:0 4px 24px rgba(59,130,246,.45)">
       &#9654;&nbsp; Calcular
     </button>
   </div>
 </div>
+<!-- espaçamento para o conteúdo não ficar atrás da barra fixa -->
+<div style="height:70px"></div>
 
 </main>
 <script>
