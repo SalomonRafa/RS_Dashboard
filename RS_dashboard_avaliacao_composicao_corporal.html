@@ -303,7 +303,7 @@ svg text{font-family:'DM Sans',sans-serif}
         <option value="F" selected>Feminino</option><option value="M">Masculino</option>
       </select>
     </div>
-    <div class="ig"><span class="il">Data de Nascimento <span class="req">*</span></span><input class="i" id="fx-nasc" type="date" oninput="calcIdade()"></div>
+    <div class="ig"><span class="il">Data de Nascimento <span class="req">*</span></span><input class="i" id="fx-nasc" type="date" oninput="calcIdade()" onchange="calcIdade()"></div>
     <div class="ig"><span class="il">Idade <span class="itag opt">(calculada)</span></span><input class="i calc" id="fx-idade" type="number" placeholder="—" readonly></div>
     <div class="ig"><span class="il">Estatura (cm) <span class="req">*</span></span><input class="i" id="fx-altura" type="number" step="0.1" placeholder="ex: 170" oninput="atualizarHeader()"></div>
     <div class="ig"><span class="il">De onde vêm os dados?</span>
@@ -1057,10 +1057,10 @@ function autoCalcCorte() {
 // pp BF/mês por ritmo
 const RITMO_PP = { conservador: 0.5, moderado: 1.0, agressivo: 1.5 };
 
+function recalcCenarios() {
   if (window._ctx) {
     atualizarGET(window._ctx);
   } else {
-    // Ainda sem dados calculados — mostra orientação contextual por objetivo
     const msgs = {
       cut:  'Preencha os dados e clique em Calcular para ver os cenários de perda de gordura.',
       mnt:  'Preencha os dados e clique em Calcular para ver o cenário de manutenção.',
