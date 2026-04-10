@@ -361,10 +361,6 @@ svg text{font-family:'DM Sans',sans-serif}
       <div id="circ-result" style="margin-top:6px;font-size:10px;color:var(--lb);display:none"></div>
     </div>
     <div class="infbanner" id="inf-banner"></div>
-    <div style="display:flex;gap:7px;margin-top:11px">
-      <button class="btn bp2" onclick="calcular()">Calcular</button>
-      <button class="btn bs" onclick="limpar()">Limpar</button>
-    </div>
     <div style="margin-top:6px;font-size:9px;color:var(--mu)"><span style="color:var(--rs)">*</span> obrigatório &nbsp;·&nbsp; <span style="color:var(--pu)">roxo</span> = inferido automaticamente</div>
   </div>
 
@@ -851,6 +847,19 @@ svg text{font-family:'DM Sans',sans-serif}
     </div>
     <svg id="chart" width="100%" height="260" style="overflow:visible"></svg>
     <div id="chart-insight" style="font-size:11px;color:var(--lb);line-height:1.6;padding:8px 12px;background:var(--sf2);border-radius:7px;display:none"></div>
+  </div>
+</div>
+
+<!-- ══ BOTÃO CALCULAR — BARRA FIXA NO FINAL ══════════════════════════════════ -->
+<div style="position:sticky;bottom:0;z-index:90;background:linear-gradient(to top,#0e1117 65%,transparent);padding:14px 28px 18px;margin-top:20px">
+  <div style="max-width:1520px;margin:0 auto;display:flex;align-items:center;gap:10px">
+    <div style="flex:1;font-size:11px;color:var(--mu)">
+      Preencha os dados acima e clique para processar todos os cálculos.
+    </div>
+    <button class="btn bs" onclick="limpar()" style="padding:12px 20px;font-size:12px">Limpar</button>
+    <button class="btn bp2" onclick="calcular()" style="padding:13px 32px;font-size:14px;font-weight:700;letter-spacing:.02em;box-shadow:0 4px 24px rgba(59,130,246,.4)">
+      &#9654;&nbsp; Calcular
+    </button>
   </div>
 </div>
 
@@ -1467,6 +1476,33 @@ function getExKcal(tmb, massa) {
   return num('get-ex-fix')||0;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// SIMULAÇÃO DINÂMICA — Hall (2011) + Forbes (1987)
+// Integração Euler diária: adaptação metabólica + partição G/MLG
+// ══════════════════════════════════════════════════════════════════
+function simularTrajetoria(bw0, fm0, get0, ingestao, maxDias) {
+  const C = 10.4; // constante Forbes
+  let bw = bw0, fm = fm0, mlgS = bw0 - fm0;
+  const pts = [{ dia:0, peso:bw, gord:fm, mlg:mlgS, bf:+(fm/bw*100).toFixed(1), get:+get0.toFixed(0) }];
+  for (let d = 1; d <= maxDias; d++) {
+    const getAtual = get0 * Math.pow(bw / bw0, 0.75); // Kleiber: adaptação metabólica
+    const def = getAtual - ingestao;
+    if (def > 0) {
+      const fg  = fm / (fm + C);                     // Forbes: fração da perda que é gordura
+      fm  = Math.max(0.5, fm  - (def * fg)  / 9400); // 9.4 kcal/g gordura
+      mlgS = Math.max(10, mlgS - (def*(1-fg)) / 1800);// ~1.8 kcal/g MLG mix
+    } else {
+      fm  += Math.abs(def) * 0.3 / 9400;
+      mlgS += Math.abs(def) * 0.7 / 1800;
+    }
+    bw = fm + mlgS;
+    if (d % 7 === 0 || d === maxDias)
+      pts.push({ dia:d, peso:+bw.toFixed(2), gord:+fm.toFixed(2),
+                 mlg:+mlgS.toFixed(2), bf:+(fm/bw*100).toFixed(1), get:+getAtual.toFixed(0) });
+  }
+  return pts;
+}
+
 function atualizarGET(ctx) {
   const {massa,mlg,visceral,osso,musculo,gordKg,gordPct,sexo}=ctx;
   const vals=window._vals; if(!vals)return;
@@ -1590,7 +1626,32 @@ function atualizarGET(ctx) {
   const ritmo    = el('meta-ritmo')?.value || 'moderado';
   const gordPctAtual = gordKg / massa * 100;
 
-  // ── Déficit base ──
+  // ── Hipocalórica I e II — sempre calculadas pelo peso (como planilha Marcelo)
+  // Independentes de input do usuário: derivadas do peso corporal atual
+  // HI  = perder 0,5% do peso/mês em gordura  → déficit diário necessário
+  // HII = perder 1,0% do peso/mês em gordura
+  const gordaMesHI   = massa * 0.005;           // kg gordura/mês — 0,5% peso
+  const gordaMesHII  = massa * 0.010;           // kg gordura/mês — 1,0% peso
+  const defHI        = (gordaMesHI  * 7700) / 30; // kcal/dia
+  const defHII       = (gordaMesHII * 7700) / 30;
+  const ingHI        = get - defHI;
+  const ingHII       = get - defHII;
+
+  // Prazo Hipoc I e II para a gordura a perder (se definida), com simulação dinâmica
+  function prazoSimulado(deficit, gordMeta) {
+    if (!gordMeta || deficit <= 0) return null;
+    const ing  = get - deficit;
+    const traj = simularTrajetoria(massa, gordKg, get, ing, 365);
+    const fm0  = gordKg - gordMeta;
+    const pt   = traj.find(p => p.gord <= fm0);
+    return pt ? pt.dia : null;
+  }
+  const prazoHI  = gPerder > 0 ? prazoSimulado(defHI,  gPerder) : null;
+  const prazoHII = gPerder > 0 ? prazoSimulado(defHII, gPerder) : null;
+  const prazoHILinear  = gPerder > 0 ? Math.round(gPerder * 7700 / defHI)  : null;
+  const prazoHIILinear = gPerder > 0 ? Math.round(gPerder * 7700 / defHII) : null;
+
+  // ── Déficit do cenário selecionado pelo ritmo (para projeções detalhadas)
   let defDia;
   if (ritmo === 'manual') {
     defDia = num('meta-deficit') || 500;
@@ -1599,90 +1660,60 @@ function atualizarGET(ctx) {
     defDia = (ppMes / 100 * massa * 7700) / 30;
   }
 
-  // ── Taxa máxima de oxidação de gordura — Alpert (2005) ──
-  // FM × 290 kcal/dia = limite biológico de mobilização de gordura
-  const defMaxAlpert  = gordKg * 290;
-  const defMaxSeguro  = Math.min(defMaxAlpert, get * 0.40,
-                          get - (sexo === 'F' ? 1200 : 1500));
-  const defAlertado   = defDia > defMaxSeguro;
+  // ── Alpert (2005): taxa máxima de oxidação de gordura ──
+  const defMaxAlpert = gordKg * 290;
+  const defMaxSeguro = Math.min(defMaxAlpert, get * 0.40,
+                        get - (sexo === 'F' ? 1200 : 1500));
+  const defAlertado  = defDia > defMaxSeguro;
 
-  // ── Forbes partitioning: fração gordura/MLG na perda ──
-  // Hall (2008): dMLG/dBW = C / (FM + C), C = 10.4 kg
-  const C_FORBES    = 10.4;
-  const fracGord    = gordKg / (gordKg + C_FORBES);  // fração da perda que será gordura
-  const fracMLG     = 1 - fracGord;
-  const mlgPerdida  = gPerder > 0 ? gPerder * fracMLG  : 0;
+  // ── Forbes/Hall: partição gordura vs MLG na perda ──
+  const C_FORBES        = 10.4;
+  const fracGord        = gordKg / (gordKg + C_FORBES);
+  const fracMLG         = 1 - fracGord;
+  const mlgPerdida      = gPerder > 0 ? gPerder * fracMLG  : 0;
   const gordPerdidaReal = gPerder > 0 ? gPerder * fracGord : 0;
 
-  // ── Simulação dinâmica — integração Euler diária ──
-  // Gera trajetória semana a semana com adaptação metabólica
-  function simularTrajetoria(bw0, fm0, get0, ingestao, maxDias) {
-    const C = 10.4;
-    let bw = bw0, fm = fm0, mlgSim = bw0 - fm0;
-    const pts = [{ dia: 0, peso: bw, gord: fm, mlg: mlgSim, bf: fm/bw*100, get: get0 }];
-    for (let d = 1; d <= maxDias; d++) {
-      const getAtual = get0 * Math.pow(bw / bw0, 0.75);
-      const def = getAtual - ingestao;
-      if (def > 0) {
-        const fg = fm / (fm + C);
-        const dFm  = (def * fg)  / 9400;   // gordura: 9.4 kcal/g
-        const dMlg = (def * (1-fg)) / 1800; // MLG mix: ~1.8 kcal/g
-        fm  = Math.max(0.5, fm  - dFm);
-        mlgSim = Math.max(10, mlgSim - dMlg);
-      } else {
-        fm  += Math.abs(def) * 0.3 / 9400;
-        mlgSim += Math.abs(def) * 0.7 / 1800;
-      }
-      bw = fm + mlgSim;
-      if (d % 7 === 0 || d === maxDias) {
-        pts.push({ dia: d, peso: +bw.toFixed(2), gord: +fm.toFixed(2),
-                   mlg: +mlgSim.toFixed(2), bf: +(fm/bw*100).toFixed(1),
-                   get: +getAtual.toFixed(0) });
-      }
-    }
-    return pts;
-  }
-
-  // Prazo dinâmico: simula até atingir meta de gordura
+  // ── Simulação dinâmica para o cenário do ritmo selecionado ──
   let diasSim = null;
   if (gPerder > 0 && defDia > 0) {
-    const ingestaSim = get - defDia;
-    const trajTest   = simularTrajetoria(massa, gordKg, get, ingestaSim, 365);
-    const metaFm     = gordKg - gPerder;
-    const pontoMeta  = trajTest.find(p => p.gord <= metaFm);
-    diasSim = pontoMeta ? pontoMeta.dia : null;
+    const trajTest = simularTrajetoria(massa, gordKg, get, get - defDia, 365);
+    const metaFm   = gordKg - gPerder;
+    const pt       = trajTest.find(p => p.gord <= metaFm);
+    diasSim = pt ? pt.dia : null;
   }
-
-  // Prazo linear simples (para comparação)
   const diasLinear = gPerder > 0 && defDia > 0
     ? Math.round((gPerder * 7700) / defDia) : null;
 
-  // Armazena trajetória para o gráfico
+  // Trajetória para gráfico (usa déficit do ritmo selecionado)
   window._simTraj = gPerder > 0 && defDia > 0
     ? simularTrajetoria(massa, gordKg, get, get - defDia, diasSim ? diasSim + 14 : 120)
     : null;
 
-  // ── Projeção do estado final (Forbes-ajustado) ──
-  const pesoFinal  = massa - gPerder;
-  const gordFinal  = Math.max(0, gordKg - gordPerdidaReal);
-  const mlgFinal   = mlg - mlgPerdida;
-  const bfFinal    = gordFinal / pesoFinal * 100;
+  // Também gera trajetórias HI e HII para curvas de adaptação metabólica
+  // Visíveis no modo "Projeção" do gráfico, usando 90 dias como horizonte fixo
+  window._simTrajHI  = simularTrajetoria(massa, gordKg, get, ingHI,  90);
+  window._simTrajHII = simularTrajetoria(massa, gordKg, get, ingHII, 90);
 
-  // ── GET e ingestão de manutenção pós-meta (Hall 2008) ──
-  // Adaptive thermogenesis: ~5 kcal/dia por % de peso perdido
-  const pctPeso    = gPerder / massa * 100;
-  const penalThermo = pctPeso * 5;
-  const getManut   = get * Math.pow(pesoFinal / massa, 0.75) - penalThermo;
+  // ── Estado final Forbes-ajustado ──
+  const pesoFinal = massa - gPerder;
+  const gordFinal = Math.max(0, gordKg - gordPerdidaReal);
+  const mlgFinal  = mlg - mlgPerdida;
+  const bfFinal   = pesoFinal > 0 ? gordFinal / pesoFinal * 100 : gordPctAtual;
+
+  // ── Manutenção pós-meta (Hall 2012 + adaptive thermogenesis) ──
+  const pctPeso      = gPerder / massa * 100;
+  const penalThermo  = pctPeso * 5;
+  const getManut     = get * Math.pow(Math.max(pesoFinal, 30) / massa, 0.75) - penalThermo;
   const intestaManut = Math.max(getManut, sexo === 'F' ? 1200 : 1500);
 
+  // ── Labels ritmo ──
   const prazoLabel = diasSim
-    ? `${diasSim} dias (dinâmico)` : diasLinear
-    ? `${diasLinear} dias (linear)` : '—';
-
+    ? `${diasSim}d (dinâmico)` : diasLinear
+    ? `${diasLinear}d (linear)` : '—';
   const ritmoLabels = {
-    conservador: ['Conservador', 'var(--tl)'],
-    moderado:    ['Moderado',    'var(--gn)'],
-    agressivo:   ['Agressivo',   'var(--am)'],
+    conservador: ['Conservador','var(--tl)'],
+    moderado:    ['Moderado',   'var(--gn)'],
+    agressivo:   ['Agressivo',  'var(--am)'],
     manual: defDia < 300 ? ['Conservador','var(--tl)']
            : defDia < 600 ? ['Moderado','var(--gn)']
            : defDia < 900 ? ['Agressivo','var(--am)']
@@ -1695,42 +1726,51 @@ function atualizarGET(ctx) {
   if (rlEl) { rlEl.textContent = `${f0(defDia)} kcal/dia`; rlEl.style.color = ritmoCor; }
 
   const intv = kcalLBM2 * mlg;
+
+  // Descrição de prazo para Hipoc I e II
+  const descHI  = gPerder > 0
+    ? `−${f0(defHI)} kcal/dia | ${f1(gordaMesHI*12/massa*100)}%BF/ano → ${prazoHI ? prazoHI+'d (Hall)' : prazoHILinear ? prazoHILinear+'d' : '—'}`
+    : `−${f0(defHI)} kcal/dia | −${f1(gordaMesHI)} kg gord/mês`;
+  const descHII = gPerder > 0
+    ? `−${f0(defHII)} kcal/dia | ${f1(gordaMesHII*12/massa*100)}%BF/ano → ${prazoHII ? prazoHII+'d (Hall)' : prazoHIILinear ? prazoHIILinear+'d' : '—'}`
+    : `−${f0(defHII)} kcal/dia | −${f1(gordaMesHII)} kg gord/mês`;
+
   el('cenarios-wrap').innerHTML = [
-    { n:'Normocalórica',          d:'Manutenção do peso atual',                     k:get,   on:false, c:'var(--tl)' },
-    { n:'Intervenção (kcal/MLG)', d:`${kcalLBM2} kcal × ${f1(mlg)} kg MLG`,        k:intv,  on:true,  c:'var(--ac)' },
-    { n:`Hipocalórica — ${ritmoLbl}`,
-                                  d:`−${f0(defDia)} kcal/dia → ${prazoLabel}`,
-                                                                                    k:get-defDia, on:false, c:ritmoCor },
-    { n:'Manutenção pós-meta',    d:`GET reduzido após atingir ${f1(pesoFinal)} kg`, k:f0(intestaManut), on:false, c:'var(--purple)' },
+    { n:'Normocalórica',             d:'Manutenção do peso atual',                k:get,        on:false, c:'var(--tl)'    },
+    { n:'Intervenção (kcal/MLG)',    d:`${kcalLBM2} kcal × ${f1(mlg)} kg MLG`,   k:intv,       on:true,  c:'var(--ac)'    },
+    { n:'Hipocalórica I — 0,5%/mês',d:descHI,                                    k:ingHI,      on:false, c:'var(--am)'    },
+    { n:'Hipocalórica II — 1,0%/mês',d:descHII,                                  k:ingHII,     on:false, c:'var(--rs)'    },
+    { n:'Manutenção pós-meta',       d:`GET adaptado após atingir ${f1(pesoFinal)} kg`, k:intestaManut, on:false, c:'var(--pu)' },
   ].map(c=>`<div class="scen ${c.on?'on':''}">
     <div><div class="sname" style="color:${c.c}">${c.n}</div><div class="sdesc">${c.d}</div></div>
     <div style="text-align:right"><div class="skcal" style="color:${c.c}">${f0(c.k)}</div><div class="sunit">kcal/dia</div></div>
   </div>`).join('');
 
-  // Alertas Alpert
-  const ws = validarDef(get-defDia, get, sexo);
-  if (defAlertado) ws.push(`Déficit (${f0(defDia)} kcal) próximo do limite biológico de oxidação de gordura para FM=${f1(gordKg)}kg (Alpert: ${f0(defMaxAlpert)} kcal/dia).`);
+  // Alertas
+  const ws = validarDef(ingHI, get, sexo);
+  if (defAlertado) ws.push(`Déficit selecionado (${f0(defDia)} kcal) excede limite seguro. Alpert: FM=${f1(gordKg)}kg → máx ${f0(defMaxAlpert)} kcal/dia.`);
 
   el('projecoes-wrap').innerHTML = `
     <div class="srow">
-      <span class="slbl">Déficit diário<small>${ritmoLbl}</small></span>
-      <span class="sval">${f0(defDia)} kcal <span style="font-size:10px;color:${ritmoCor}">${ritmoLbl}</span></span>
+      <span class="slbl">Taxa máx. oxidação gordura<small>Alpert (2005)</small></span>
+      <span class="sval" style="color:${defHII>defMaxAlpert?'var(--rs)':'var(--tl)'}">${f0(defMaxAlpert)} kcal/dia</span>
     </div>
     <div class="srow">
-      <span class="slbl">Taxa máx. oxidação gordura<small>Alpert (2005) — limite biológico</small></span>
-      <span class="sval" style="color:${defDia > defMaxAlpert?'var(--rs)':'var(--tl)'}">${f0(defMaxAlpert)} kcal/dia</span>
+      <span class="slbl">Hipoc I — déficit / perda mensal<small>0,5% peso/mês em gordura</small></span>
+      <span class="sval">${f0(defHI)} kcal/dia &nbsp;→&nbsp; ${f1(gordaMesHI)} kg/mês</span>
     </div>
     <div class="srow">
-      <span class="slbl">Gordura a reduzir</span>
-      <span class="sval">${f1(gPerder)} kg</span>
+      <span class="slbl">Hipoc II — déficit / perda mensal<small>1,0% peso/mês em gordura</small></span>
+      <span class="sval">${f0(defHII)} kcal/dia &nbsp;→&nbsp; ${f1(gordaMesHII)} kg/mês</span>
     </div>
+    ${gPerder > 0 ? `
     <div class="srow">
-      <span class="slbl">Forbes: gordura vs MLG perdida<small>Hall (2008) — FM=${f1(gordKg)}kg → ${f0(fracGord*100)}%G / ${f0(fracMLG*100)}%MLG</small></span>
+      <span class="slbl">Forbes: gordura vs MLG perdida<small>Hall (2008) — BF=${f1(gordPctAtual)}% → ${f0(fracGord*100)}%G / ${f0(fracMLG*100)}%MLG por kg</small></span>
       <span class="sval">${f1(gordPerdidaReal)}kg G + <span style="color:var(--rs)">${f1(mlgPerdida)}kg MLG</span></span>
     </div>
     <div class="srow">
-      <span class="slbl">Prazo dinâmico<small>com adaptação metabólica (Hall 2011)</small></span>
-      <span class="sval" style="color:var(--ac)">${diasSim ? diasSim+' dias' : '—'}</span>
+      <span class="slbl">Prazo Hipoc I / Hipoc II<small>simulação dinâmica (Hall 2011)</small></span>
+      <span class="sval" style="color:var(--ac)">${prazoHI ? prazoHI+'d' : '—'} / ${prazoHII ? prazoHII+'d' : '—'}</span>
     </div>
     <div class="srow">
       <span class="slbl">% Gordura projetado<small>Forbes-ajustado</small></span>
@@ -1738,11 +1778,11 @@ function atualizarGET(ctx) {
     </div>
     <div class="srow">
       <span class="slbl">Peso final / MLG final</span>
-      <span class="sval">${f1(pesoFinal)} kg / ${f1(mlgFinal)} kg MLG</span>
-    </div>
+      <span class="sval">${f1(pesoFinal)} kg / ${f1(mlgFinal)} kg</span>
+    </div>` : ''}
     <div class="srow" style="border:none">
-      <span class="slbl">Ingestão manutenção pós-meta<small>GET reduzido + adaptive thermogenesis (Hall 2012)</small></span>
-      <span class="sval" style="color:var(--purple)">${f0(intestaManut)} kcal/dia</span>
+      <span class="slbl">Ingestão manutenção pós-meta<small>adaptive thermogenesis (Hall 2012)</small></span>
+      <span class="sval" style="color:var(--pu)">${f0(intestaManut)} kcal/dia</span>
     </div>`;
 
   const wEl = el('warn-deficit');
@@ -1833,7 +1873,11 @@ function renderComparativo() {
 // ── renderChart: suporta barras agrupadas, linhas e simulação ─────
 function renderChart() {
   const svg = el('chart'); if (!svg) return;
-  const W = svg.parentElement.clientWidth - 8, H = 260;
+  const hasSim2 = window._simTrajHI && window._simTrajHI.length > 1;
+  const H = (chartMode === 'bar' && hasSim2) ? 420 : 260;
+  const W = svg.parentElement.clientWidth - 8;
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
   const P = { t:20, r:14, b:50, l:44 };
   const iW = W - P.l - P.r, iH = H - P.t - P.b;
 
@@ -1846,9 +1890,6 @@ function renderChart() {
     return;
   }
 
-  svg.setAttribute('width', W);
-  svg.setAttribute('height', H);
-
   // ── MODO BARRAS AGRUPADAS ──────────────────────────────────────
   if (chartMode === 'bar') {
     if (data.length < 1) {
@@ -1860,10 +1901,15 @@ function renderChart() {
       { key:'musculo', label:'Músculo (kg)', color:'#22c55e' },
       { key:'gord',    label:'%G',           color:'#f43f5e' },
     ];
+
+    // Se há simulação, reserva espaço inferior para curvas de adaptação
+    const hasSim2 = window._simTrajHI && window._simTrajHI.length > 1;
+    const chartH  = hasSim2 ? Math.round(H * 0.60) : H;
+    const simH    = H - chartH - 12; // altura do painel de curvas
+
     const allVals = data.flatMap(d => metrics.map(m => d[m.key])).filter(v=>v>0);
     const maxV = Math.ceil(Math.max(...allVals) * 1.12);
-    const minV = 0;
-    const yS = v => P.t + iH - ((v-minV)/(maxV-minV))*iH;
+    const yS = v => P.t + chartH - P.b - ((v)/(maxV)) * (chartH - P.t - P.b);
 
     const nGroups = data.length;
     const nBars   = metrics.length;
@@ -1871,54 +1917,88 @@ function renderChart() {
     const barW    = Math.min(groupW / (nBars + 1), 28);
     const gap     = (groupW - barW * nBars) / (nBars + 1);
 
-    let grid = '', bars = '', labels = '', legend = '', vals = '';
+    let grid='', bars='', labels='', legend='', vals='';
 
-    // Grid
-    for (let g = 0; g <= 5; g++) {
-      const y = P.t + (g/5)*iH, v = maxV - g*(maxV-minV)/5;
-      grid += `<line x1="${P.l}" y1="${y}" x2="${P.l+iW}" y2="${y}" stroke="#252e40" stroke-width="1"/>
-               <text x="${P.l-5}" y="${y+4}" text-anchor="end" fill="#64748b" font-size="9">${v.toFixed(0)}</text>`;
+    for (let g=0;g<=4;g++){
+      const y=P.t+(g/4)*(chartH-P.t-P.b), v=maxV-g*maxV/4;
+      grid+=`<line x1="${P.l}" y1="${y}" x2="${P.l+iW}" y2="${y}" stroke="#252e40" stroke-width="1"/>
+             <text x="${P.l-5}" y="${y+4}" text-anchor="end" fill="#64748b" font-size="9">${v.toFixed(0)}</text>`;
     }
 
-    // Bars
     data.forEach((d, gi) => {
       const gx = P.l + gi * groupW;
       metrics.forEach((m, bi) => {
         const x = gx + gap + bi*(barW+gap/nBars);
         const v = d[m.key] || 0;
         const y = yS(v);
-        const h = P.t + iH - y;
-        // Barra com gradiente implícito via rects empilhados
-        bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${Math.max(2,h).toFixed(1)}"
-          rx="3" fill="${m.color}" fill-opacity="${gi===data.length-1?0.9:0.5}"
-          stroke="${m.color}" stroke-width="${gi===data.length-1?1.5:0.5}" stroke-opacity="0.6"/>`;
-        // Valor acima da barra
+        const bh = chartH - P.b - y;
+        bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${Math.max(2,bh).toFixed(1)}"
+          rx="3" fill="${m.color}" fill-opacity="${gi===data.length-1?0.88:0.45}"
+          stroke="${m.color}" stroke-width="${gi===data.length-1?1.5:0.5}" stroke-opacity="0.5"/>`;
         vals += `<text x="${(x+barW/2).toFixed(1)}" y="${(y-4).toFixed(1)}" text-anchor="middle"
           fill="${m.color}" font-size="8" font-weight="600" opacity="${gi===data.length-1?1:0.7}">${v.toFixed(1)}</text>`;
-        // Seta de delta entre primeira e última avaliação para a mesma métrica
         if (data.length >= 2 && gi === data.length-1) {
           const v0 = data[0][m.key] || 0;
           const dv = v - v0;
           if (Math.abs(dv) > 0.05) {
-            const arrowColor = (m.key === 'gord' ? dv < 0 : dv > 0) ? '#22c55e' : '#f43f5e';
-            const arrow = dv > 0 ? '▲' : '▼';
+            const ac = (m.key==='gord' ? dv<0 : dv>0) ? '#22c55e' : '#f43f5e';
             vals += `<text x="${(x+barW/2).toFixed(1)}" y="${(y-14).toFixed(1)}" text-anchor="middle"
-              fill="${arrowColor}" font-size="8" font-weight="700">${arrow}${Math.abs(dv).toFixed(1)}</text>`;
+              fill="${ac}" font-size="8" font-weight="700">${dv>0?'▲':'▼'}${Math.abs(dv).toFixed(1)}</text>`;
           }
         }
       });
-      // Label data do grupo
-      labels += `<text x="${(gx+groupW/2).toFixed(1)}" y="${P.t+iH+14}" text-anchor="middle" fill="#94a3b8" font-size="9">${d.data||`#${gi+1}`}</text>`;
+      labels += `<text x="${(gx+groupW/2).toFixed(1)}" y="${chartH-P.b+14}" text-anchor="middle" fill="#94a3b8" font-size="9">${d.data||`#${gi+1}`}</text>`;
     });
 
-    // Legenda
     metrics.forEach((m,i) => {
-      const lx = P.l + i * (iW/metrics.length);
+      const lx = P.l + i*(iW/metrics.length);
       legend += `<rect x="${lx}" y="${H-12}" width="10" height="10" rx="2" fill="${m.color}" fill-opacity="0.7"/>
                  <text x="${lx+13}" y="${H-4}" fill="#94a3b8" font-size="9">${m.label}</text>`;
     });
 
-    svg.innerHTML = `<g>${grid}</g><g>${bars}</g><g>${vals}</g><g>${labels}</g><g>${legend}</g>`;
+    // ── Painel de curvas de adaptação metabólica (Hall) ──
+    let simPanel = '';
+    if (hasSim2) {
+      const sy0 = chartH + 8;
+      const syH = simH - 10;
+      const tHI  = window._simTrajHI;
+      const tHII = window._simTrajHII;
+      const maxDia = Math.max(tHI[tHI.length-1].dia, tHII[tHII.length-1].dia);
+      const allW = [...tHI, ...tHII].map(p=>p.peso);
+      const wMin = Math.floor(Math.min(...allW)*0.97), wMax = Math.ceil(Math.max(...allW)*1.01);
+      const sx = d => P.l + (d/maxDia)*iW;
+      const sw = v => sy0 + syH - ((v-wMin)/(wMax-wMin))*syH;
+
+      // Label
+      simPanel += `<text x="${P.l}" y="${sy0-2}" fill="#64748b" font-size="8" font-weight="600">CURVA DE ADAPTAÇÃO METABÓLICA (Hall 2011) — 90 dias</text>`;
+      simPanel += `<line x1="${P.l}" y1="${sy0}" x2="${P.l+iW}" y2="${sy0}" stroke="#252e40" stroke-width="1"/>`;
+
+      // Linhas HI e HII
+      const pathHI  = tHI.map((p,i)=>`${i===0?'M':'L'}${sx(p.dia).toFixed(1)} ${sw(p.peso).toFixed(1)}`).join(' ');
+      const pathHII = tHII.map((p,i)=>`${i===0?'M':'L'}${sx(p.dia).toFixed(1)} ${sw(p.peso).toFixed(1)}`).join(' ');
+      simPanel += `<path d="${pathHI}"  fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>`;
+      simPanel += `<path d="${pathHII}" fill="none" stroke="#f43f5e" stroke-width="1.8" stroke-dasharray="4,2" stroke-linecap="round"/>`;
+
+      // Valores finais
+      const lastHI  = tHI[tHI.length-1],  lastHII = tHII[tHII.length-1];
+      simPanel += `<circle cx="${sx(lastHI.dia)}" cy="${sw(lastHI.peso)}" r="3.5" fill="#f59e0b"/>
+                   <text x="${(sx(lastHI.dia)+5).toFixed(1)}" y="${sw(lastHI.peso)+4}" fill="#f59e0b" font-size="9" font-weight="600">${lastHI.peso.toFixed(1)}kg</text>`;
+      simPanel += `<circle cx="${sx(lastHII.dia)}" cy="${sw(lastHII.peso)}" r="3.5" fill="#f43f5e"/>
+                   <text x="${(sx(lastHII.dia)+5).toFixed(1)}" y="${(sw(lastHII.peso)-4).toFixed(1)}" fill="#f43f5e" font-size="9" font-weight="600">${lastHII.peso.toFixed(1)}kg</text>`;
+
+      // Peso atual
+      simPanel += `<line x1="${P.l}" y1="${sw(window._simTrajHI[0].peso)}" x2="${P.l+iW}" y2="${sw(window._simTrajHI[0].peso)}"
+                    stroke="#3b82f6" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+                   <text x="${P.l}" y="${(sw(window._simTrajHI[0].peso)-3).toFixed(1)}" fill="#3b82f6" font-size="8" opacity="0.7">peso atual ${window._simTrajHI[0].peso}kg</text>`;
+
+      // Legenda curvas
+      simPanel += `<rect x="${P.l}" y="${sy0+syH+2}" width="10" height="6" rx="1" fill="#f59e0b" opacity="0.8"/>
+                   <text x="${P.l+13}" y="${sy0+syH+9}" fill="#94a3b8" font-size="8">Hipoc I (0,5%/mês)</text>
+                   <rect x="${P.l+110}" y="${sy0+syH+2}" width="10" height="6" rx="1" fill="#f43f5e" opacity="0.8"/>
+                   <text x="${P.l+123}" y="${sy0+syH+9}" fill="#94a3b8" font-size="8">Hipoc II (1,0%/mês)</text>`;
+    }
+
+    svg.innerHTML = `<g>${grid}</g><g>${bars}</g><g>${vals}</g><g>${labels}</g><g>${legend}</g><g>${simPanel}</g>`;
     return;
   }
 
