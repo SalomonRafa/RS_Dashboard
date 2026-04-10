@@ -138,11 +138,13 @@ svg text{font-family:'DM Sans',sans-serif}
 .btn-print:hover{background:rgba(59,130,246,.2);border-color:var(--ac)}
 /* ─ PRINT LAYOUT ─ */
 @media print {
-  @page{ size:A4 portrait; margin:12mm 14mm 14mm 14mm }
+  @page{ size:A4 portrait; margin:10mm 12mm 12mm 12mm }
   *{ -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
   body{ background:#fff!important; color:#1e293b!important; font-family:'DM Sans',sans-serif; font-size:10pt; }
-  .hdr,.main,.btn-print{ display:none!important }
-  #laudo{ display:block!important }
+  .hdr,.main,.btn-print,.laudo-actions{ display:none!important }
+  #laudo{ display:block!important; position:static!important; background:#fff!important; padding:0!important; overflow:visible!important; }
+  .laudo-page{ box-shadow:none!important; margin:0!important; width:100%!important; min-height:0!important; page-break-after:always; break-after:page; }
+  .laudo-page:last-child{ page-break-after:avoid; break-after:avoid; }
 }
 /* ─ LAUDO ─ */
 #laudo{
@@ -1485,17 +1487,22 @@ function getExKcal(tmb, massa) {
 function simularTrajetoria(bw0, fm0, get0, ingestao, maxDias) {
   const C = 10.4; // constante Forbes
   let bw = bw0, fm = fm0, mlgS = bw0 - fm0;
+  const mlg0 = mlgS; // FFM inicial — Bug #6
   const pts = [{ dia:0, peso:bw, gord:fm, mlg:mlgS, bf:+(fm/bw*100).toFixed(1), get:+get0.toFixed(0) }];
   for (let d = 1; d <= maxDias; d++) {
-    const getAtual = get0 * Math.pow(bw / bw0, 0.75); // Kleiber: adaptação metabólica
+    // Bug #6 corrigido: Hall 2011 — RMR escala com FFM^0.75, PA escala linearmente com BW
+    const rmbFrac = 0.65, paFrac = 0.35;
+    const getAtual = get0 * (rmbFrac * Math.pow(mlgS / mlg0, 0.75) + paFrac * (bw / bw0));
     const def = getAtual - ingestao;
+    const fg = fm / (fm + C); // Forbes: fração gordura (usado em déficit e superávit)
     if (def > 0) {
-      const fg  = fm / (fm + C);                     // Forbes: fração da perda que é gordura
-      fm  = Math.max(0.5, fm  - (def * fg)  / 9400); // 9.4 kcal/g gordura
-      mlgS = Math.max(10, mlgS - (def*(1-fg)) / 1800);// ~1.8 kcal/g MLG mix
+      // Perda: Bug #3 corrigido — constantes Hall 2008 (9441 / 1816)
+      fm   = Math.max(0.5, fm  - (def * fg)   / 9441);
+      mlgS = Math.max(10,  mlgS - (def*(1-fg)) / 1816);
     } else {
-      fm  += Math.abs(def) * 0.3 / 9400;
-      mlgS += Math.abs(def) * 0.7 / 1800;
+      // Superávit: Bug #2 corrigido — partição Forbes dinâmica (não 70/30 fixo)
+      fm   += Math.abs(def) * fg      / 9441;
+      mlgS += Math.abs(def) * (1-fg)  / 1816;
     }
     bw = fm + mlgS;
     if (d % 7 === 0 || d === maxDias)
@@ -1514,8 +1521,10 @@ function atualizarGET(ctx) {
   const eta_pct=(parseFloat(el('get-eta')?.value)||etaVal||10)/100;
   const neat=tmb*neat_pct;
   const exKcal=getExKcal(tmb,massa);
-  const eta=tmb*eta_pct;
-  const get=tmb+neat+exKcal+eta;
+  // #1 corrigido: ETA = % do GET (Hall/Levine 2002). GET = baseMetab / (1 - eta_pct)
+  const baseMetab = tmb + neat + exKcal;
+  const get = baseMetab / (1 - eta_pct);
+  const eta = get - baseMetab;
 
   el('get-total').textContent=f0(get)+' kcal';
   el('get-formula').textContent=`${EQ[eqSel].label} | NEAT ${(neat_pct*100).toFixed(0)}% · Ex · ETA ${(eta_pct*100).toFixed(0)}%`;
@@ -1629,13 +1638,13 @@ function atualizarGET(ctx) {
   const gordPctAtual = gordKg / massa * 100;
 
   // ── Hipocalórica I e II — sempre calculadas pelo peso (como planilha Marcelo)
-  // Independentes de input do usuário: derivadas do peso corporal atual
-  // HI  = perder 0,5% do peso/mês em gordura  → déficit diário necessário
-  // HII = perder 1,0% do peso/mês em gordura
-  const gordaMesHI   = massa * 0.005;           // kg gordura/mês — 0,5% peso
-  const gordaMesHII  = massa * 0.010;           // kg gordura/mês — 1,0% peso
-  const defHI        = (gordaMesHI  * 7700) / 30; // kcal/dia
-  const defHII       = (gordaMesHII * 7700) / 30;
+  // Bug #4 corrigido: densidade real = partição Forbes × constantes Hall 2008
+  const fracGordAuto = gordKg / (gordKg + 10.4);
+  const densReal     = fracGordAuto * 9441 + (1 - fracGordAuto) * 1816;
+  const gordaMesHI   = massa * 0.005;
+  const gordaMesHII  = massa * 0.010;
+  const defHI        = (gordaMesHI  * densReal) / 30;
+  const defHII       = (gordaMesHII * densReal) / 30;
   const ingHI        = get - defHI;
   const ingHII       = get - defHII;
 
@@ -1650,16 +1659,16 @@ function atualizarGET(ctx) {
   }
   const prazoHI  = gPerder > 0 ? prazoSimulado(defHI,  gPerder) : null;
   const prazoHII = gPerder > 0 ? prazoSimulado(defHII, gPerder) : null;
-  const prazoHILinear  = gPerder > 0 ? Math.round(gPerder * 7700 / defHI)  : null;
-  const prazoHIILinear = gPerder > 0 ? Math.round(gPerder * 7700 / defHII) : null;
+  const prazoHILinear  = gPerder > 0 ? Math.round(gPerder * densReal / defHI)  : null;
+  const prazoHIILinear = gPerder > 0 ? Math.round(gPerder * densReal / defHII) : null;
 
-  // ── Déficit do cenário selecionado pelo ritmo (para projeções detalhadas)
+  // Bug #5 corrigido: defDia usa densReal (Forbes + Hall 2008), não 7700 fixo
   let defDia;
   if (ritmo === 'manual') {
     defDia = num('meta-deficit') || 500;
   } else {
     const ppMes = RITMO_PP[ritmo] || 1.0;
-    defDia = (ppMes / 100 * massa * 7700) / 30;
+    defDia = (ppMes / 100 * massa * densReal) / 30;
   }
 
   // ── Alpert (2005): taxa máxima de oxidação de gordura ──
@@ -1684,7 +1693,7 @@ function atualizarGET(ctx) {
     diasSim = pt ? pt.dia : null;
   }
   const diasLinear = gPerder > 0 && defDia > 0
-    ? Math.round((gPerder * 7700) / defDia) : null;
+    ? Math.round((gPerder * densReal) / defDia) : null;
 
   // Trajetória para gráfico (usa déficit do ritmo selecionado)
   window._simTraj = gPerder > 0 && defDia > 0
@@ -2140,6 +2149,50 @@ function imprimirRelatorio() {
   window.print();
 }
 
+// ── Captura SVG do gráfico histórico para inclusão no PDF ──────────
+function gerarSVGHistorico() {
+  const data = histData.filter(h => h.peso > 0);
+  if (data.length < 2) return null;
+
+  const W = 480, H = 160, P = { t:18, r:10, b:38, l:38 };
+  const iW = W-P.l-P.r, iH = H-P.t-P.b;
+  const series = [
+    { key:'peso',    label:'Peso (kg)',    color:'#1d4ed8', dash:false },
+    { key:'musculo', label:'Músculo (kg)', color:'#16a34a', dash:false },
+    { key:'gord',    label:'% Gordura',    color:'#dc2626', dash:true  },
+  ];
+  const allV = data.flatMap(d=>[d.peso,d.musculo,d.gord]).filter(v=>v>0);
+  const minV = Math.floor(Math.min(...allV)*0.88), maxV = Math.ceil(Math.max(...allV)*1.10);
+  const xS = i => P.l + (i/(data.length-1))*iW;
+  const yS = v => P.t + iH - ((v-minV)/(maxV-minV))*iH;
+
+  let grid='', paths='', dots='', xL='', leg='';
+  for(let g=0;g<=4;g++){
+    const y=P.t+(g/4)*iH, v=maxV-g*(maxV-minV)/4;
+    grid+=`<line x1="${P.l}" y1="${y.toFixed(1)}" x2="${P.l+iW}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-width="1"/>
+           <text x="${P.l-4}" y="${(y+4).toFixed(1)}" text-anchor="end" fill="#94a3b8" font-size="8">${v.toFixed(0)}</text>`;
+  }
+  series.forEach(s=>{
+    const dA=data.map((d,i)=>`${i===0?'M':'L'}${xS(i).toFixed(1)} ${yS(d[s.key]).toFixed(1)}`).join(' ');
+    if(s.key==='peso'){paths+=`<path d="${dA} L${xS(data.length-1).toFixed(1)} ${P.t+iH} L${P.l} ${P.t+iH} Z" fill="${s.color}" fill-opacity="0.06"/>`;}
+    paths+=`<path d="${dA}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5,3"':''} stroke-linecap="round"/>`;
+    data.forEach((d,i)=>{
+      const x=xS(i),y=yS(d[s.key]);
+      dots+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${s.color}" fill-opacity="0.25" stroke="${s.color}" stroke-width="1.5"/>
+             <text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" text-anchor="middle" fill="${s.color}" font-size="7.5" font-weight="600">${(+d[s.key]).toFixed(1)}</text>`;
+    });
+  });
+  data.forEach((d,i)=>{ xL+=`<text x="${xS(i).toFixed(1)}" y="${P.t+iH+14}" text-anchor="middle" fill="#64748b" font-size="8">${d.data||`#${i+1}`}</text>`; });
+  series.forEach((s,i)=>{
+    const lx=P.l+i*(iW/3);
+    leg+=`<line x1="${lx}" y1="${H-6}" x2="${lx+12}" y2="${H-6}" stroke="${s.color}" stroke-width="1.8" ${s.dash?'stroke-dasharray="4,3"':''}/><text x="${lx+15}" y="${H-2}" fill="#64748b" font-size="8">${s.label}</text>`;
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="font-family:'DM Sans',sans-serif">
+    <rect width="${W}" height="${H}" fill="#f8fafc" rx="6"/>
+    <g>${grid}</g><g>${paths}</g><g>${dots}</g><g>${xL}</g><g>${leg}</g>
+  </svg>`;
+}
+
 function gerarHTMLRelatorio() {
   const ctx    = window._ctx;
   const vals   = window._vals || {};
@@ -2159,13 +2212,19 @@ function gerarHTMLRelatorio() {
   const neat_pct = (num('get-neat')||15)/100;
   const eta_pct  = (parseFloat(el('get-eta')?.value)||etaVal||10)/100;
   const exKcal   = tmbAtiva ? getExKcal(tmbAtiva, massa) : 0;
-  const get      = tmbAtiva ? tmbAtiva*(1+neat_pct+eta_pct)+exKcal : null;
+  // Bug #1 aplicado também ao relatório: GET = baseMetab / (1 - eta_pct)
+  const get      = tmbAtiva ? (tmbAtiva + tmbAtiva*neat_pct + exKcal) / (1 - eta_pct) : null;
 
   const gPerder = num('meta-gord-kg')||0, dias = num('meta-dias')||60;
-  const defDia  = gPerder>0 ? gPerder*7700/dias : 0;
+  // Bug #4/#5 aplicado ao relatório: densReal em vez de 7700 fixo
+  const fracGordR  = gordKg / (gordKg + 10.4);
+  const densRealR  = fracGordR * 9441 + (1 - fracGordR) * 1816;
+  const defDia  = gPerder>0 ? gPerder*densRealR/dias : 0;
   const hipI    = get ? get-defDia : null;
   const intv    = (num('meta-kcal-lbm')||32)*mlg;
   const novoGPct= gPerder>0 ? (gordKg-gPerder)/(massa-gPerder)*100 : null;
+  // Gráfico histórico para o PDF
+  const svgHistorico = gerarSVGHistorico();
 
   const [gordCls,gordClsB] = classGord(gordPct,sexo,idade);
   const [lbmCls]           = classLBM(lbmPct,sexo);
@@ -2336,7 +2395,7 @@ function gerarHTMLRelatorio() {
         <tr><td>Metabolismo Basal (TMB)</td><td>Energia para respirar, fazer o coração bater e manter os órgãos funcionando — mesmo dormindo</td><td class="hl" style="text-align:right">${Math.round(tmbAtiva)}</td><td style="text-align:right">${f1(tmbAtiva/get*100)}%</td></tr>
         <tr><td>NEAT — Movimento do dia a dia</td><td>Caminhar, subir escadas, tarefas domésticas — tudo que não é exercício planejado</td><td style="text-align:right">${Math.round(tmbAtiva*neat_pct)}</td><td style="text-align:right">${f1(tmbAtiva*neat_pct/get*100)}%</td></tr>
         <tr><td>Exercício físico planejado</td><td>Treinos, aulas, atividades estruturadas</td><td style="text-align:right">${Math.round(exKcal)}</td><td style="text-align:right">${f1(exKcal/get*100)}%</td></tr>
-        <tr><td>ETA — Efeito térmico dos alimentos</td><td>Energia que o corpo gasta para digerir, absorver e metabolizar os nutrientes</td><td style="text-align:right">${Math.round(tmbAtiva*eta_pct)}</td><td style="text-align:right">${f1(tmbAtiva*eta_pct/get*100)}%</td></tr>
+        <tr><td>ETA — Efeito térmico dos alimentos</td><td>Energia que o corpo gasta para digerir, absorver e metabolizar os nutrientes (≈${(eta_pct*100).toFixed(0)}% do GET)</td><td style="text-align:right">${Math.round(get-(tmbAtiva+tmbAtiva*neat_pct+exKcal))}</td><td style="text-align:right">${f1((get-(tmbAtiva+tmbAtiva*neat_pct+exKcal))/get*100)}%</td></tr>
         <tr style="background:#eff6ff"><td><strong>TOTAL (GET)</strong></td><td><strong>Tudo que seu corpo gasta em um dia típico</strong></td><td class="hl" style="text-align:right"><strong>${Math.round(get)}</strong></td><td style="text-align:right">100%</td></tr>
       </tbody>
     </table>`:'<p style="color:#64748b;font-size:9pt">Dados insuficientes para calcular o gasto energético.</p>'}
@@ -2396,6 +2455,7 @@ function gerarHTMLRelatorio() {
     return `
     <div class="l-sec">
       <div class="l-sec-title">&#128200; Evolução — Comparativo entre Avaliações</div>
+      ${svgHistorico ? `<div style="margin-bottom:10px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${svgHistorico}</div>` : ''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
         <table class="l-tbl">
           <thead><tr><th>Indicador</th><th>Avaliação 1<br><span style="font-weight:400;font-size:7pt">${a.data}</span></th><th>Avaliação atual<br><span style="font-weight:400;font-size:7pt">${b.data}</span></th><th>Variação</th></tr></thead>
