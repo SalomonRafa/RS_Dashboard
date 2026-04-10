@@ -235,7 +235,8 @@ svg text{font-family:'DM Sans',sans-serif}
 .l-figure-img{flex-shrink:0}
 .l-figure-data{flex:1}
 /* NOTA DE RODAPÉ */
-.l-foot{position:absolute;bottom:12mm;left:16mm;right:16mm;border-top:1px solid #e2e8f0;padding-top:5px;display:flex;justify-content:space-between;align-items:center}
+.l-foot{border-top:1px solid #e2e8f0;padding-top:5px;display:flex;justify-content:space-between;align-items:center;margin-top:16px}
+@media print{.l-foot{margin-top:12px}}
 .l-foot-left{font-size:7pt;color:#94a3b8;line-height:1.5}
 .l-foot-right{font-size:7pt;color:#94a3b8;text-align:right}
 .l-note{background:#fff7ed;border:1px solid #fed7aa;border-radius:5px;padding:7px 10px;font-size:7.5pt;color:#92400e;margin-top:10px;line-height:1.5}
@@ -2149,24 +2150,75 @@ function imprimirRelatorio() {
   window.print();
 }
 
-// ── Captura SVG do gráfico histórico para inclusão no PDF ──────────
+// ── SVG composição corporal para PDF (4 compartimentos) ─────────
+function gerarSVGComposicao(gordPct, muscPct, viscPct, ossoPct, massa, gordKg, musculo, visceral, osso) {
+  const W = 460, H = 110;
+  const segs = [
+    { label:'Gordura', pct:gordPct, kg:gordKg,  color:'#dc2626' },
+    { label:'Músculo', pct:muscPct, kg:musculo, color:'#1d4ed8' },
+    { label:'Vísceras',pct:viscPct, kg:visceral,color:'#d97706' },
+    { label:'Osso',    pct:ossoPct, kg:osso,    color:'#64748b' },
+  ];
+  const bH=28, bY=16, lY=bY+bH+18;
+  let bars='', labels='', legend='';
+  let x=0;
+  segs.forEach(s=>{
+    const w = (s.pct/100)*W;
+    bars+=`<rect x="${x.toFixed(1)}" y="${bY}" width="${w.toFixed(1)}" height="${bH}" fill="${s.color}" opacity="0.85"/>`;
+    if(s.pct>5) bars+=`<text x="${(x+w/2).toFixed(1)}" y="${bY+bH/2+4}" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">${s.pct.toFixed(1)}%</text>`;
+    x+=w;
+  });
+  // Cards abaixo
+  segs.forEach((s,i)=>{
+    const cx=i*(W/4), cw=(W/4)-6;
+    legend+=`<rect x="${cx}" y="${lY}" width="${cw}" height="40" rx="4" fill="${s.color}" fill-opacity="0.08" stroke="${s.color}" stroke-width="1"/>
+             <text x="${(cx+cw/2).toFixed(1)}" y="${lY+14}" text-anchor="middle" fill="${s.color}" font-size="9" font-weight="700">${s.pct.toFixed(1)}%</text>
+             <text x="${(cx+cw/2).toFixed(1)}" y="${lY+25}" text-anchor="middle" fill="#64748b" font-size="8">${s.kg.toFixed(2)} kg</text>
+             <text x="${(cx+cw/2).toFixed(1)}" y="${lY+36}" text-anchor="middle" fill="#94a3b8" font-size="7">${s.label}</text>`;
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="font-family:'DM Sans',sans-serif">
+    <rect width="${W}" height="${H}" fill="#f8fafc" rx="6"/>
+    <g>${bars}</g><g>${legend}</g>
+  </svg>`;
+}
+
+// ── SVG histórico evolutivo para PDF ─────────────────────────────
 function gerarSVGHistorico() {
   const data = histData.filter(h => h.peso > 0);
-  if (data.length < 2) return null;
+  if (data.length < 1) return null;
 
-  const W = 480, H = 160, P = { t:18, r:10, b:38, l:38 };
-  const iW = W-P.l-P.r, iH = H-P.t-P.b;
-  const series = [
-    { key:'peso',    label:'Peso (kg)',    color:'#1d4ed8', dash:false },
-    { key:'musculo', label:'Músculo (kg)', color:'#16a34a', dash:false },
-    { key:'gord',    label:'% Gordura',    color:'#dc2626', dash:true  },
+  // Com apenas 1 ponto, mostra gráfico de barras simples da avaliação atual
+  if (data.length === 1) {
+    const d = data[0];
+    const W=460, H=100, vals=[{l:'Peso',v:d.peso,c:'#1d4ed8'},{l:'Músculo',v:d.musculo,c:'#16a34a'},{l:'% Gordura',v:d.gord,c:'#dc2626'}];
+    const maxV=Math.ceil(Math.max(...vals.map(v=>v.v))*1.15);
+    const bW=60, gap=40, P={t:16,b:30};
+    const iH=H-P.t-P.b;
+    let bars='',labels='';
+    vals.forEach((v,i)=>{
+      const x=gap+i*(bW+gap), bh=(v.v/maxV)*iH, y=P.t+iH-bh;
+      bars+=`<rect x="${x}" y="${y.toFixed(1)}" width="${bW}" height="${bh.toFixed(1)}" rx="4" fill="${v.c}" fill-opacity="0.8"/>
+             <text x="${(x+bW/2).toFixed(1)}" y="${(y-4).toFixed(1)}" text-anchor="middle" fill="${v.c}" font-size="9" font-weight="700">${v.v.toFixed(1)}</text>
+             <text x="${(x+bW/2).toFixed(1)}" y="${H-8}" text-anchor="middle" fill="#64748b" font-size="8">${v.l}</text>`;
+    });
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="font-family:'DM Sans',sans-serif">
+      <rect width="${W}" height="${H}" fill="#f8fafc" rx="6"/>
+      <text x="10" y="12" fill="#94a3b8" font-size="8">Avaliação: ${d.data||'atual'}</text>
+      <g>${bars}</g></svg>`;
+  }
+
+  const W=460, H=160, P={t:18,r:10,b:38,l:38};
+  const iW=W-P.l-P.r, iH=H-P.t-P.b;
+  const series=[
+    {key:'peso',   label:'Peso (kg)',   color:'#1d4ed8',dash:false},
+    {key:'musculo',label:'Músculo (kg)',color:'#16a34a',dash:false},
+    {key:'gord',   label:'% Gordura',  color:'#dc2626',dash:true },
   ];
-  const allV = data.flatMap(d=>[d.peso,d.musculo,d.gord]).filter(v=>v>0);
-  const minV = Math.floor(Math.min(...allV)*0.88), maxV = Math.ceil(Math.max(...allV)*1.10);
-  const xS = i => P.l + (i/(data.length-1))*iW;
-  const yS = v => P.t + iH - ((v-minV)/(maxV-minV))*iH;
-
-  let grid='', paths='', dots='', xL='', leg='';
+  const allV=data.flatMap(d=>[d.peso,d.musculo,d.gord]).filter(v=>v>0);
+  const minV=Math.floor(Math.min(...allV)*0.88), maxV=Math.ceil(Math.max(...allV)*1.10);
+  const xS=i=>P.l+(data.length<2?iW/2:i/(data.length-1)*iW);
+  const yS=v=>P.t+iH-((v-minV)/(maxV-minV))*iH;
+  let grid='',paths='',dots='',xL='',leg='';
   for(let g=0;g<=4;g++){
     const y=P.t+(g/4)*iH, v=maxV-g*(maxV-minV)/4;
     grid+=`<line x1="${P.l}" y1="${y.toFixed(1)}" x2="${P.l+iW}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-width="1"/>
@@ -2174,7 +2226,7 @@ function gerarSVGHistorico() {
   }
   series.forEach(s=>{
     const dA=data.map((d,i)=>`${i===0?'M':'L'}${xS(i).toFixed(1)} ${yS(d[s.key]).toFixed(1)}`).join(' ');
-    if(s.key==='peso'){paths+=`<path d="${dA} L${xS(data.length-1).toFixed(1)} ${P.t+iH} L${P.l} ${P.t+iH} Z" fill="${s.color}" fill-opacity="0.06"/>`;}
+    if(s.key==='peso') paths+=`<path d="${dA} L${xS(data.length-1).toFixed(1)} ${P.t+iH} L${P.l} ${P.t+iH} Z" fill="${s.color}" fill-opacity="0.06"/>`;
     paths+=`<path d="${dA}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5,3"':''} stroke-linecap="round"/>`;
     data.forEach((d,i)=>{
       const x=xS(i),y=yS(d[s.key]);
@@ -2223,8 +2275,9 @@ function gerarHTMLRelatorio() {
   const hipI    = get ? get-defDia : null;
   const intv    = (num('meta-kcal-lbm')||32)*mlg;
   const novoGPct= gPerder>0 ? (gordKg-gPerder)/(massa-gPerder)*100 : null;
-  // Gráfico histórico para o PDF
-  const svgHistorico = gerarSVGHistorico();
+  // Gráficos para o PDF
+  const svgHistorico    = gerarSVGHistorico();
+  const svgComposicao   = gerarSVGComposicao(gordPct, musculo/massa*100, visceral/massa*100, osso/massa*100, massa, gordKg, musculo, visceral, osso);
 
   const [gordCls,gordClsB] = classGord(gordPct,sexo,idade);
   const [lbmCls]           = classLBM(lbmPct,sexo);
@@ -2320,18 +2373,8 @@ function gerarHTMLRelatorio() {
           <div class="l-comp-card viscera"><div class="l-comp-val">${f1(viscPct)}%</div><div class="l-comp-kg">${f2(visceral)} kg</div><div class="l-comp-name">Vísceras e Água</div></div>
           <div class="l-comp-card bone"><div class="l-comp-val">${f1(ossoPct)}%</div><div class="l-comp-kg">${f2(osso)} kg</div><div class="l-comp-name">Compartimento Ósseo</div></div>
         </div>
-        <div class="l-bar" style="margin-top:8px">
-          <div class="l-bar-seg" style="background:#dc2626;flex:${gordPct}">${gordPct>6?f0(gordPct)+'%':''}</div>
-          <div class="l-bar-seg" style="background:#1d4ed8;flex:${muscPct}">${muscPct>6?f0(muscPct)+'%':''}</div>
-          <div class="l-bar-seg" style="background:#d97706;flex:${viscPct}">${viscPct>4?f0(viscPct)+'%':''}</div>
-          <div class="l-bar-seg" style="background:#64748b;flex:${ossoPct}">${ossoPct>4?f0(ossoPct)+'%':''}</div>
-        </div>
-        <div class="l-bar-legend" style="margin-top:5px">
-          <span><span class="dot" style="background:#dc2626"></span>Gordura</span>
-          <span><span class="dot" style="background:#1d4ed8"></span>Músculo</span>
-          <span><span class="dot" style="background:#d97706"></span>Vísceras</span>
-          <span><span class="dot" style="background:#64748b"></span>Osso</span>
-        </div>
+        <!-- Gráfico SVG de composição corporal -->
+        <div style="margin-top:8px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${svgComposicao}</div>
       </div>
     </div>
 
@@ -2427,10 +2470,16 @@ function gerarHTMLRelatorio() {
     </div>
   </div>
 
-  <!-- SEÇÃO 5: EVOLUÇÃO COMPARATIVA (se histórico disponível) -->
+  <!-- SEÇÃO 5: EVOLUÇÃO / HISTÓRICO -->
   ${(()=>{
     const hd = histData.filter(h=>h.peso>0);
-    if (hd.length < 2) return '';
+    // Sempre mostra gráfico se disponível
+    const chartHTML = svgHistorico
+      ? `<div style="margin-bottom:10px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${svgHistorico}</div>`
+      : '';
+    if (hd.length < 2) return chartHTML
+      ? `<div class="l-sec"><div class="l-sec-title">&#128200; Histórico de Avaliações</div>${chartHTML}</div>`
+      : '';
     const a = hd[0], b = hd[hd.length-1];
     const dp = (b.peso - a.peso).toFixed(1);
     const dg = (b.gord - a.gord).toFixed(1);
@@ -2442,7 +2491,6 @@ function gerarHTMLRelatorio() {
       return `<span style="color:${bom?'#16a34a':'#dc2626'};font-weight:700">${n>0?'+':''}${v}</span>`;
     };
     const nomeP = nome.split(' ')[0];
-    // Gera texto interpretativo
     const msgs = [];
     const dpN = parseFloat(dp), dgN = parseFloat(dg), dmN = parseFloat(dm);
     if (dpN < -0.3) msgs.push(`O peso corporal reduziu <strong>${Math.abs(dpN).toFixed(1)} kg</strong> no período — um resultado direto do trabalho realizado.`);
@@ -2455,7 +2503,7 @@ function gerarHTMLRelatorio() {
     return `
     <div class="l-sec">
       <div class="l-sec-title">&#128200; Evolução — Comparativo entre Avaliações</div>
-      ${svgHistorico ? `<div style="margin-bottom:10px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">${svgHistorico}</div>` : ''}
+      ${chartHTML}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
         <table class="l-tbl">
           <thead><tr><th>Indicador</th><th>Avaliação 1<br><span style="font-weight:400;font-size:7pt">${a.data}</span></th><th>Avaliação atual<br><span style="font-weight:400;font-size:7pt">${b.data}</span></th><th>Variação</th></tr></thead>
