@@ -2283,7 +2283,7 @@ function gerarHTMLRelatorio() {
   const [lbmCls]           = classLBM(lbmPct,sexo);
   const imcCls             = classIMC(imc);
   const fonteLbl = {dobras:'Dobras cutâneas',bio:'Bioimpedância',shaped:'Shaped-3D / Foto',manual:'Inserção manual'}[fonte]||fonte;
-  const cls2color = c => c==='Excelente'||c==='Saudável'?'#16a34a':c==='Bom'?'#0369a1':c==='Regular'?'#d97706':'#dc2626';
+  const cls2color = c => c.startsWith('Excelente')||c.startsWith('Saudável')||c==='Bom'?'#16a34a':c==='Regular'||c.startsWith('Bom')?'#0369a1':c==='Fraco'||c==='Moderado'?'#d97706':'#dc2626';
 
   // ── NARRATIVAS personalizadas ──
   const primeiroNome = nomeP;
@@ -2306,9 +2306,9 @@ function gerarHTMLRelatorio() {
   })();
 
   // MLG/LBM
-  const lbmNarr = lbmCls==='Excelente'?'proporção de massa magra excelente — indica boa distribuição corporal'
-    :lbmCls.startsWith('Saudável')?'proporção de massa magra saudável'
-    :'proporção de massa magra abaixo do esperado — priorizar estratégias de preservação muscular';
+  const lbmNarr = lbmCls.startsWith('Excelente') ? 'em nível excelente — indica boa distribuição e preservação de tecido metabolicamente ativo'
+    : lbmCls.startsWith('Saudável') ? 'dentro de uma faixa saudável'
+    : 'abaixo do esperado para o seu perfil — priorizar estratégias de preservação e ganho muscular';
 
   // GET
   const getNarr = get ? `Seu corpo precisa de aproximadamente <strong>${Math.round(get)} kcal por dia</strong> para funcionar considerando seu metabolismo em repouso, movimentação diária e atividade física. Comer consistentemente abaixo desse valor gera déficit; acima, gera superávit.` : '—';
@@ -2390,7 +2390,7 @@ function gerarHTMLRelatorio() {
       </div>
       <div style="border-left:3px solid #0369a1;padding:7px 10px;background:#f0f9ff;border-radius:0 6px 6px 0">
         <div style="font-size:8pt;font-weight:700;color:#0369a1">Massa Magra Total (MLG) — ${f1(mlg)} kg (${f1(lbmPct)}%)</div>
-        <div style="font-size:8pt;color:#374151;margin-top:3px">Sua massa magra representa tudo que não é gordura: músculos, ossos, órgãos e água. A proporção de <strong>${f1(lbmPct)}%</strong> está <strong style="color:${cls2color(lbmCls)}">${lbmNarr}</strong>. Preservar e aumentar a massa magra é o principal objetivo de qualquer intervenção nutricional bem conduzida.</div>
+        <div style="font-size:8pt;color:#374151;margin-top:3px">Sua massa magra representa tudo que não é gordura: músculos, ossos, órgãos e água. Com <strong>${f1(lbmPct)}%</strong> de massa magra, seu resultado está <strong style="color:${cls2color(lbmCls)}">${lbmNarr}</strong>. Preservar e aumentar a massa magra é o principal objetivo de qualquer intervenção nutricional bem conduzida.</div>
       </div>
     </div>
   </div>
