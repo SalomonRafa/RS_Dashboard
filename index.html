@@ -2291,30 +2291,30 @@ function gerarHTMLRelatorio() {
   // Gordura
   const gordNarr = (() => {
     const ref = sexo==='F'
-      ? ['muito baixo para saúde hormonal e óssea','excelente — dentro da faixa ideal para saúde e desempenho','bom — levemente acima do ideal, mas dentro de parâmetros saudáveis','moderadamente elevado — risco metabólico começa a aumentar nessa faixa','elevado — associado a maior risco cardiovascular e metabólico']
-      : ['muito baixo — pode comprometer função hormonal e imunológica','excelente — faixa atlética ideal','bom — dentro dos parâmetros saudáveis','moderadamente elevado — indica acúmulo progressivo de gordura visceral','elevado — atenção ao risco cardiovascular e metabólico'];
+      ? ['muito baixo para saúde hormonal e óssea','excelente, dentro da faixa ideal para saúde e desempenho','bom, levemente acima do ideal, mas dentro de parâmetros saudáveis','moderadamente elevado. O risco metabólico começa a aumentar nessa faixa','elevado, associado a maior risco cardiovascular e metabólico']
+      : ['muito baixo, podendo comprometer a função hormonal e imunológica','excelente, dentro da faixa atlética ideal','bom, dentro dos parâmetros saudáveis','moderadamente elevado, com acúmulo progressivo de gordura visceral','elevado. Atenção ao risco cardiovascular e metabólico'];
     const idx = gordCls==='Excelente'?1:gordCls==='Bom'?2:gordCls==='Regular'?3:gordCls==='Fraco'?4:gordCls==='Muito fraco'?4:0;
     return ref[Math.min(idx,ref.length-1)];
   })();
 
   // Músculo
   const muscNarr = (() => {
-    const ref = muscPct >= (sexo==='F'?38:44) ? 'acima da média — indica boa preservação ou desenvolvimento muscular'
+    const ref = muscPct >= (sexo==='F'?38:44) ? 'acima da média, com boa preservação e desenvolvimento muscular'
               : muscPct >= (sexo==='F'?32:38) ? 'dentro da faixa esperada para adultos ativos'
-              : 'abaixo do esperado — pode indicar necessidade de estímulo de força e adequação proteica';
+              : 'abaixo do esperado. Pode indicar necessidade de estímulo de força e adequação proteica';
     return ref;
   })();
 
   // MLG/LBM
-  const lbmNarr = lbmCls.startsWith('Excelente') ? 'em nível excelente — indica boa distribuição e preservação de tecido metabolicamente ativo'
+  const lbmNarr = lbmCls.startsWith('Excelente') ? 'em nível excelente. Indica boa distribuição e preservação de tecido metabolicamente ativo'
     : lbmCls.startsWith('Saudável') ? 'dentro de uma faixa saudável'
-    : 'abaixo do esperado para o seu perfil — priorizar estratégias de preservação e ganho muscular';
+    : 'abaixo do esperado para o seu perfil. Priorizar estratégias de preservação e ganho muscular';
 
   // GET
   const getNarr = get ? `Seu corpo precisa de aproximadamente <strong>${Math.round(get)} kcal por dia</strong> para funcionar considerando seu metabolismo em repouso, movimentação diária e atividade física. Comer consistentemente abaixo desse valor gera déficit; acima, gera superávit.` : '—';
 
   // Cenário
-  const cenarioNarr = hipI ? `Para uma perda de ${f1(gPerder)} kg de gordura em ${dias} dias, o déficit diário necessário é de <strong>${Math.round(defDia)} kcal</strong>, o que representa uma ingestão aproximada de <strong>${Math.round(hipI)} kcal/dia</strong>. Esse ritmo é considerado ${defDia<300?'conservador e sustentável':defDia<600?'moderado e seguro':'agressivo — exige acompanhamento próximo'}.` : '';
+  const cenarioNarr = hipI ? `Para uma perda de ${f1(gPerder)} kg de gordura em ${dias} dias, o déficit diário necessário é de <strong>${Math.round(defDia)} kcal</strong>, o que representa uma ingestão aproximada de <strong>${Math.round(hipI)} kcal/dia</strong>. Esse ritmo é considerado ${defDia<300?'conservador e sustentável':defDia<600?'moderado e seguro':'agressivo, exigindo acompanhamento próximo'}.` : '';
 
   // Canvas
   const cv = el('body-canvas');
@@ -2333,7 +2333,7 @@ function gerarHTMLRelatorio() {
   }).join('');
 
   const notas=[];
-  if(el('inf-banner').style.display!=='none') notas.push(el('inf-banner').textContent.replace('Valores estimados automaticamente — ',''));
+  if(el('inf-banner').style.display!=='none') notas.push(el('inf-banner').textContent.replace('Valores estimados automaticamente: ',''));
 
   return `
 <div class="laudo-actions">
@@ -2363,7 +2363,7 @@ function gerarHTMLRelatorio() {
 
   <!-- SEÇÃO 1: COMPOSIÇÃO -->
   <div class="l-sec">
-    <div class="l-sec-title">&#129516; Sua Composição Corporal — O que esses números significam</div>
+    <div class="l-sec-title">&#129516; Sua Composição Corporal: o que esses números significam</div>
     <div class="l-figure">
       ${figImg?`<div class="l-figure-img"><img src="${figImg}" width="110" height="190" style="border-radius:8px;border:1px solid #e2e8f0;display:block"><div style="text-align:center;font-size:6pt;color:#94a3b8;margin-top:3px">Representação tecidual</div></div>`:''}
       <div class="l-figure-data">
@@ -2381,15 +2381,15 @@ function gerarHTMLRelatorio() {
     <!-- Narrativa por compartimento -->
     <div style="display:grid;gap:6px;margin-top:10px">
       <div style="border-left:3px solid #dc2626;padding:7px 10px;background:#fff5f5;border-radius:0 6px 6px 0">
-        <div style="font-size:8pt;font-weight:700;color:#991b1b">Gordura corporal — ${f1(gordPct)}% <span style="color:${cls2color(gordCls)}">(${gordCls})</span></div>
-        <div style="font-size:8pt;color:#374151;margin-top:3px">Seu percentual de gordura está <strong>${gordNarr}</strong>. A gordura corporal cumpre funções essenciais — proteção dos órgãos, produção hormonal, reserva energética — mas em excesso aumenta o risco de doenças metabólicas e cardiovasculares. A faixa ideal varia por sexo e idade.</div>
+        <div style="font-size:8pt;font-weight:700;color:#991b1b">Gordura corporal, ${f1(gordPct)}% <span style="color:${cls2color(gordCls)}">(${gordCls})</span></div>
+        <div style="font-size:8pt;color:#374151;margin-top:3px">Seu percentual de gordura está <strong>${gordNarr}</strong>. A gordura corporal cumpre funções essenciais: proteção dos órgãos, produção hormonal, reserva energética. Em excesso aumenta o risco de doenças metabólicas e cardiovasculares. A faixa ideal varia por sexo e idade.</div>
       </div>
       <div style="border-left:3px solid #1d4ed8;padding:7px 10px;background:#eff6ff;border-radius:0 6px 6px 0">
-        <div style="font-size:8pt;font-weight:700;color:#1e3a8a">Músculo esquelético — ${f2(musculo)} kg (${f1(muscPct)}%)</div>
+        <div style="font-size:8pt;font-weight:700;color:#1e3a8a">Músculo esquelético, ${f2(musculo)} kg (${f1(muscPct)}%)</div>
         <div style="font-size:8pt;color:#374151;margin-top:3px">Sua massa muscular está <strong>${muscNarr}</strong>. O músculo é o principal tecido metabólico do corpo: quanto mais você tem, maior é seu gasto calórico em repouso, melhor é sua sensibilidade à insulina e maior é sua autonomia funcional ao longo da vida.</div>
       </div>
       <div style="border-left:3px solid #0369a1;padding:7px 10px;background:#f0f9ff;border-radius:0 6px 6px 0">
-        <div style="font-size:8pt;font-weight:700;color:#0369a1">Massa Magra Total (MLG) — ${f1(mlg)} kg (${f1(lbmPct)}%)</div>
+        <div style="font-size:8pt;font-weight:700;color:#0369a1">Massa Magra Total (MLG), ${f1(mlg)} kg (${f1(lbmPct)}%)</div>
         <div style="font-size:8pt;color:#374151;margin-top:3px">Sua massa magra representa tudo que não é gordura: músculos, ossos, órgãos e água. Com <strong>${f1(lbmPct)}%</strong> de massa magra, seu resultado está <strong style="color:${cls2color(lbmCls)}">${lbmNarr}</strong>. Preservar e aumentar a massa magra é o principal objetivo de qualquer intervenção nutricional bem conduzida.</div>
       </div>
     </div>
@@ -2405,13 +2405,13 @@ function gerarHTMLRelatorio() {
       <div class="l-kpi"><div class="l-kpi-val">${f1(alt)}<span style="font-size:10pt;color:#64748b"> cm</span></div><div class="l-kpi-lbl">Estatura</div></div>
     </div>
     <div style="background:#fefce8;border:1px solid #fde68a;border-radius:6px;padding:8px 11px;font-size:7.5pt;color:#713f12;margin-top:6px">
-      <strong>Sobre o IMC:</strong> o Índice de Massa Corporal é uma medida prática mas limitada — ele não distingue músculo de gordura. Uma pessoa com alta massa muscular pode ter IMC elevado sem excesso de gordura. Por isso, o % de gordura e a composição corporal completa são informações muito mais relevantes para a sua saúde.
+      <strong>Sobre o IMC:</strong> o Índice de Massa Corporal é uma medida prática mas limitada: não distingue músculo de gordura. Uma pessoa com alta massa muscular pode ter IMC elevado sem excesso de gordura. Por isso, o % de gordura e a composição corporal completa são informações muito mais relevantes para a sua saúde.
     </div>
     ${(()=>{const cin=num('av-cintura'),quad=num('av-quadril');if(isNaN(cin))return'';const riscoCin=sexo==='F'?(cin<80?'Baixo':cin<88?'Moderado':'Alto'):(cin<94?'Baixo':cin<102?'Moderado':'Alto');const cor=riscoCin==='Baixo'?'#16a34a':riscoCin==='Moderado'?'#d97706':'#dc2626';const rcq=(!isNaN(quad)&&quad>0)?(cin/quad).toFixed(2):null;return`<table class="l-tbl" style="margin-top:6px"><thead><tr><th>Medida</th><th>Valor</th><th>Referência segura</th><th>Risco Cardiovascular</th></tr></thead><tbody><tr><td>Circunferência da cintura</td><td>${f1(cin)} cm</td><td>${sexo==='F'?'abaixo de 80 cm':'abaixo de 94 cm'}</td><td style="color:${cor};font-weight:600">${riscoCin}</td></tr>${rcq?`<tr><td>Relação Cintura/Quadril (RCQ)</td><td>${rcq}</td><td>${sexo==='F'?'abaixo de 0,80':'abaixo de 0,90'}</td><td></td></tr>`:''}</tbody></table><div style="font-size:7pt;color:#64748b;margin-top:4px">A cintura é um dos melhores indicadores de gordura visceral, que é a gordura acumulada ao redor dos órgãos internos e está associada a maior risco metabólico mesmo em pessoas com peso normal.</div>`;})()}
   </div>
 
   <div class="l-foot">
-    <div class="l-foot-left">Rafael Salomon — Nutricionista CRN-1 16.718 &bull; Nutrição Esportiva Funcional<br>(61) 99566-2828 &bull; rafaelsalomon@gmail.com</div>
+    <div class="l-foot-left">Rafael Salomon, Nutricionista CRN-1 16.718 &bull; Nutrição Esportiva Funcional<br>(61) 99566-2828 &bull; rafaelsalomon@gmail.com</div>
     <div class="l-foot-right">Página 1 de 2<br>${hoje}</div>
   </div>
 </div>
@@ -2419,26 +2419,26 @@ function gerarHTMLRelatorio() {
 <!-- ════ PÁGINA 2 ════ -->
 <div class="laudo-page">
   <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #1e40af;padding-bottom:7px;margin-bottom:13px">
-    <div style="font-size:11pt;font-weight:700;color:#1e293b">Rafael Salomon — Nutricionista</div>
+    <div style="font-size:11pt;font-weight:700;color:#1e293b">Rafael Salomon, Nutricionista</div>
     <div style="font-size:8pt;color:#64748b">Paciente: <strong>${nome}</strong> &bull; Avaliação: ${dataAv}</div>
   </div>
 
   <!-- SEÇÃO 3: GET -->
   <div class="l-sec">
-    <div class="l-sec-title">&#9889; Seu Gasto Energético — Quantas calorias seu corpo precisa por dia</div>
+    <div class="l-sec-title">&#9889; Seu Gasto Energético: quantas calorias seu corpo precisa por dia</div>
     ${tmbAtiva&&get?`
     <div class="l-get-box">
-      <div><div class="hl-lbl" style="font-size:9pt;font-weight:700">GET Estimado — Gasto Energético Total</div><div class="l-get-eq">Equação: ${EQ[eqSel].label} &bull; NEAT ${(neat_pct*100).toFixed(0)}% &bull; ETA ${(eta_pct*100).toFixed(0)}%</div></div>
+      <div><div class="hl-lbl" style="font-size:9pt;font-weight:700">GET Estimado, Gasto Energético Total</div><div class="l-get-eq">Equação: ${EQ[eqSel].label} &bull; NEAT ${(neat_pct*100).toFixed(0)}% &bull; ETA ${(eta_pct*100).toFixed(0)}%</div></div>
       <div class="l-get-val">${Math.round(get)} <span style="font-size:10pt;color:#64748b">kcal/dia</span></div>
     </div>
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 11px;font-size:8pt;color:#14532d;margin-bottom:8px">${getNarr}</div>
     <table class="l-tbl">
       <thead><tr><th>Componente</th><th>O que representa</th><th style="text-align:right">kcal/dia</th><th style="text-align:right">%</th></tr></thead>
       <tbody>
-        <tr><td>Metabolismo Basal (TMB)</td><td>Energia para respirar, fazer o coração bater e manter os órgãos funcionando — mesmo dormindo</td><td class="hl" style="text-align:right">${Math.round(tmbAtiva)}</td><td style="text-align:right">${f1(tmbAtiva/get*100)}%</td></tr>
-        <tr><td>NEAT — Movimento do dia a dia</td><td>Caminhar, subir escadas, tarefas domésticas — tudo que não é exercício planejado</td><td style="text-align:right">${Math.round(tmbAtiva*neat_pct)}</td><td style="text-align:right">${f1(tmbAtiva*neat_pct/get*100)}%</td></tr>
+        <tr><td>Metabolismo Basal (TMB)</td><td>Energia para respirar, fazer o coração bater e manter os órgãos funcionando, inclusive durante o sono</td><td class="hl" style="text-align:right">${Math.round(tmbAtiva)}</td><td style="text-align:right">${f1(tmbAtiva/get*100)}%</td></tr>
+        <tr><td>NEAT, Movimento do dia a dia</td><td>Caminhar, subir escadas e tarefas domésticas. Tudo que não é exercício planejado</td><td style="text-align:right">${Math.round(tmbAtiva*neat_pct)}</td><td style="text-align:right">${f1(tmbAtiva*neat_pct/get*100)}%</td></tr>
         <tr><td>Exercício físico planejado</td><td>Treinos, aulas, atividades estruturadas</td><td style="text-align:right">${Math.round(exKcal)}</td><td style="text-align:right">${f1(exKcal/get*100)}%</td></tr>
-        <tr><td>ETA — Efeito térmico dos alimentos</td><td>Energia que o corpo gasta para digerir, absorver e metabolizar os nutrientes (≈${(eta_pct*100).toFixed(0)}% do GET)</td><td style="text-align:right">${Math.round(get-(tmbAtiva+tmbAtiva*neat_pct+exKcal))}</td><td style="text-align:right">${f1((get-(tmbAtiva+tmbAtiva*neat_pct+exKcal))/get*100)}%</td></tr>
+        <tr><td>ETA, Efeito térmico dos alimentos</td><td>Energia que o corpo gasta para digerir, absorver e metabolizar os nutrientes (≈${(eta_pct*100).toFixed(0)}% do GET)</td><td style="text-align:right">${Math.round(get-(tmbAtiva+tmbAtiva*neat_pct+exKcal))}</td><td style="text-align:right">${f1((get-(tmbAtiva+tmbAtiva*neat_pct+exKcal))/get*100)}%</td></tr>
         <tr style="background:#eff6ff"><td><strong>TOTAL (GET)</strong></td><td><strong>Tudo que seu corpo gasta em um dia típico</strong></td><td class="hl" style="text-align:right"><strong>${Math.round(get)}</strong></td><td style="text-align:right">100%</td></tr>
       </tbody>
     </table>`:'<p style="color:#64748b;font-size:9pt">Dados insuficientes para calcular o gasto energético.</p>'}
@@ -2463,7 +2463,7 @@ function gerarHTMLRelatorio() {
       </div>
       <div>
         <div style="font-size:8pt;font-weight:600;color:#334155;margin-bottom:6px">Cenários de Ingestão</div>
-        ${get?`<div class="l-scen"><div><div class="l-scen-name">Manutenção</div><div class="l-scen-desc">Ingestão = GET — peso se mantém</div></div><div class="l-scen-kcal">${Math.round(get)}<span style="font-size:7pt;color:#64748b"> kcal</span></div></div>`:''}
+        ${get?`<div class="l-scen"><div><div class="l-scen-name">Manutenção</div><div class="l-scen-desc">Ingestão igual ao GET. Peso se mantém</div></div><div class="l-scen-kcal">${Math.round(get)}<span style="font-size:7pt;color:#64748b"> kcal</span></div></div>`:''}
         <div class="l-scen active"><div><div class="l-scen-name">Intervenção (kcal/MLG)</div><div class="l-scen-desc">${num('meta-kcal-lbm')||32} kcal × ${f1(mlg)} kg massa magra</div></div><div class="l-scen-kcal">${Math.round(intv)}<span style="font-size:7pt;color:#64748b"> kcal</span></div></div>
         ${hipI?`<div class="l-scen"><div><div class="l-scen-name">Hipocalórica (−${Math.round(defDia)} kcal/dia)</div><div class="l-scen-desc">Para perder ${f1(gPerder)} kg em ${dias} dias</div></div><div class="l-scen-kcal">${Math.round(hipI)}<span style="font-size:7pt;color:#64748b"> kcal</span></div></div>`:''}
       </div>
@@ -2493,16 +2493,16 @@ function gerarHTMLRelatorio() {
     const nomeP = nome.split(' ')[0];
     const msgs = [];
     const dpN = parseFloat(dp), dgN = parseFloat(dg), dmN = parseFloat(dm);
-    if (dpN < -0.3) msgs.push(`O peso corporal reduziu <strong>${Math.abs(dpN).toFixed(1)} kg</strong> no período — um resultado direto do trabalho realizado.`);
+    if (dpN < -0.3) msgs.push(`O peso corporal reduziu <strong>${Math.abs(dpN).toFixed(1)} kg</strong> no período, resultado direto do trabalho realizado.`);
     else if (dpN > 0.3) msgs.push(`O peso corporal aumentou <strong>${dpN.toFixed(1)} kg</strong>. Dependendo do contexto e do objetivo, isso pode refletir ganho de massa magra ou retenção.`);
-    if (dgN < -0.3) msgs.push(`O percentual de gordura reduziu <strong>${Math.abs(dgN).toFixed(1)} pontos percentuais</strong> — isso significa melhora direta na composição corporal.`);
+    if (dgN < -0.3) msgs.push(`O percentual de gordura reduziu <strong>${Math.abs(dgN).toFixed(1)} pontos percentuais</strong>, o que representa melhora direta na composição corporal.`);
     else if (dgN > 0.3) msgs.push(`O percentual de gordura aumentou <strong>${dgN.toFixed(1)} pp</strong>. Esse dado merece atenção no próximo ciclo de trabalho.`);
-    if (dmN > 0.2) msgs.push(`A massa muscular aumentou <strong>${dmN.toFixed(1)} kg</strong> — um dos melhores resultados possíveis em termos de saúde metabólica e funcional.`);
+    if (dmN > 0.2) msgs.push(`A massa muscular aumentou <strong>${dmN.toFixed(1)} kg</strong>, um dos melhores resultados possíveis em termos de saúde metabólica e funcional.`);
     else if (dmN < -0.2) msgs.push(`A massa muscular reduziu <strong>${Math.abs(dmN).toFixed(1)} kg</strong>. A preservação e o ganho de músculo devem ser priorizados na próxima fase.`);
-    if (dpN < -0.1 && dmN > 0.1) msgs.push(`Perda simultânea de gordura e ganho de músculo é o cenário mais desejado — chamamos isso de recomposição corporal.`);
+    if (dpN < -0.1 && dmN > 0.1) msgs.push(`Perda simultânea de gordura e ganho de músculo é o cenário mais desejado. Chamamos isso de recomposição corporal.`);
     return `
     <div class="l-sec">
-      <div class="l-sec-title">&#128200; Evolução — Comparativo entre Avaliações</div>
+      <div class="l-sec-title">&#128200; Evolução: Comparativo entre Avaliações</div>
       ${chartHTML}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
         <table class="l-tbl">
@@ -2523,11 +2523,11 @@ function gerarHTMLRelatorio() {
 
   ${notas.length?`<div class="l-note"><strong>Notas técnicas:</strong> ${notas.join('; ')}.</div>`:''}
   <div class="l-note" style="background:#f0fdf4;border-color:#bbf7d0;color:#14532d;margin-top:8px">
-    Este relatório foi gerado com base nos dados inseridos e em equações preditivas validadas cientificamente. Os valores são estimativas — a precisão depende da qualidade dos dados de entrada e do método de avaliação utilizado. Este documento não substitui a consulta e o acompanhamento com o nutricionista.
+    Este relatório foi gerado com base nos dados inseridos e em equações preditivas validadas cientificamente. Os valores são estimativas. A precisão depende da qualidade dos dados de entrada e do método de avaliação utilizado. Este documento não substitui a consulta e o acompanhamento com o nutricionista.
   </div>
 
   <div class="l-foot">
-    <div class="l-foot-left">Rafael Salomon — Nutricionista CRN-1 16.718 &bull; Nutrição Esportiva Funcional<br>(61) 99566-2828 &bull; rafaelsalomon@gmail.com</div>
+    <div class="l-foot-left">Rafael Salomon, Nutricionista CRN-1 16.718 &bull; Nutrição Esportiva Funcional<br>(61) 99566-2828 &bull; rafaelsalomon@gmail.com</div>
     <div class="l-foot-right">Página 2 de 2<br>${hoje}</div>
   </div>
 </div>`;
