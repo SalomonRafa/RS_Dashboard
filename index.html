@@ -2258,8 +2258,8 @@ function gerarSVGComposicao(gordPct, muscPct, viscPct, ossoPct, massa, gordKg, m
              <text x="${(cx+cw/2).toFixed(1)}" y="${lY+25}" text-anchor="middle" fill="#64748b" font-size="8">${s.kg.toFixed(2)} kg</text>
              <text x="${(cx+cw/2).toFixed(1)}" y="${lY+36}" text-anchor="middle" fill="#94a3b8" font-size="7">${s.label}</text>`;
   });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="font-family:'DM Sans',sans-serif">
-    <rect width="${W}" height="${H}" fill="#f8fafc" rx="6"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W1}" height="${H1}" style="font-family:'DM Sans',sans-serif">
+    <rect width="${W1}" height="${H1}" fill="#f8fafc" rx="6"/>
     <g>${bars}</g><g>${legend}</g>
   </svg>`;
 }
@@ -2272,10 +2272,10 @@ function gerarSVGHistorico() {
   // Com apenas 1 ponto, mostra gráfico de barras simples da avaliação atual
   if (data.length === 1) {
     const d = data[0];
-    const W=460, H=100, vals=[{l:'Peso',v:d.peso,c:'#1d4ed8'},{l:'Músculo',v:d.musculo,c:'#16a34a'},{l:'% Gordura',v:d.gord,c:'#dc2626'}];
+    const W1=460, H1=100, vals=[{l:'Peso',v:d.peso,c:'#1d4ed8'},{l:'Músculo',v:d.musculo,c:'#16a34a'},{l:'% Gordura',v:d.gord,c:'#dc2626'}];
     const maxV=Math.ceil(Math.max(...vals.map(v=>v.v))*1.15);
     const bW=60, gap=40, P={t:16,b:30};
-    const iH=H-P.t-P.b;
+    const iH=H1-P.t-P.b;
     let bars='',labels='';
     vals.forEach((v,i)=>{
       const x=gap+i*(bW+gap), bh=(v.v/maxV)*iH, y=P.t+iH-bh;
@@ -2339,7 +2339,7 @@ function gerarHTMLRelatorio() {
   const hoje   = new Date().toLocaleDateString('pt-BR');
   const nomeP  = nome.split(' ')[0]; // primeiro nome para tom pessoal
 
-  const { massa, gordKg, gordPct, mlg, lbmPct, imc, musculo, visceral, osso, alt } = ctx;
+  const { massa, gordKg, gordPct, mlg, lbmPct, imc, musculo, visceral, osso } = ctx;
   const muscPct = musculo/massa*100, viscPct = visceral/massa*100, ossoPct = osso/massa*100;
 
   const tmbAtiva = vals[eqSel];
@@ -2591,7 +2591,7 @@ function gerarHTMLRelatorio() {
       const bom = inv ? n<0 : n>0;
       return `<span style="color:${bom?'#16a34a':'#dc2626'};font-weight:700">${n>0?'+':''}${v}</span>`;
     };
-    const nomeP = nome.split(' ')[0];
+    // nomeP já declarado acima
     const msgs = [];
     const dpN = parseFloat(dp), dgN = parseFloat(dg), dmN = parseFloat(dm);
     if (dpN < -0.3) msgs.push(`O peso corporal reduziu <strong>${Math.abs(dpN).toFixed(1)} kg</strong> no período, resultado direto do trabalho realizado.`);
