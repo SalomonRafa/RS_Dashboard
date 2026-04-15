@@ -1437,18 +1437,6 @@ function desenharBoneco() { /* SVG-based — see body-svg-fig */ }
 // Inicia animação de scan imediatamente
 setTimeout(() => animarScan(), 300);
 
-// Data da avaliação: preenche automaticamente com hoje
-(function() {
-  const d = new Date();
-  const av = document.getElementById('av-data');
-  if (av && !av.value) {
-    av.value = d.getFullYear() + '-' +
-               String(d.getMonth()+1).padStart(2,'0') + '-' +
-               String(d.getDate()).padStart(2,'0');
-    if (typeof atualizarHeader === 'function') atualizarHeader();
-  }
-})();
-
 // ══════════════════════════════════════════════════════════════════
 // CÁLCULO PRINCIPAL
 // ══════════════════════════════════════════════════════════════════
@@ -2673,6 +2661,17 @@ renderHistRows();
 renderEqGrid(null);
 desenharBoneco();
 window.addEventListener('resize', () => { renderChart(); renderComparativo(); });
+
+// ── Data da avaliação: preenchimento automático com a data de hoje ──
+document.addEventListener('DOMContentLoaded', function() {
+  const av = document.getElementById('av-data');
+  if (av && !av.value) {
+    const d   = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    av.value  = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+    if (typeof atualizarHeader === 'function') atualizarHeader();
+  }
+});
 </script>
 </body>
 </html>
