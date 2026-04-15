@@ -1437,6 +1437,18 @@ function desenharBoneco() { /* SVG-based — see body-svg-fig */ }
 // Inicia animação de scan imediatamente
 setTimeout(() => animarScan(), 300);
 
+// Data da avaliação: preenche automaticamente com hoje
+(function() {
+  const d = new Date();
+  const av = document.getElementById('av-data');
+  if (av && !av.value) {
+    av.value = d.getFullYear() + '-' +
+               String(d.getMonth()+1).padStart(2,'0') + '-' +
+               String(d.getDate()).padStart(2,'0');
+    if (typeof atualizarHeader === 'function') atualizarHeader();
+  }
+})();
+
 // ══════════════════════════════════════════════════════════════════
 // CÁLCULO PRINCIPAL
 // ══════════════════════════════════════════════════════════════════
@@ -2479,7 +2491,12 @@ function gerarHTMLRelatorio() {
       </div>
       <div style="border-left:3px solid #0369a1;padding:7px 10px;background:#f0f9ff;border-radius:0 6px 6px 0">
         <div style="font-size:8pt;font-weight:700;color:#0369a1">Massa Magra Total (MLG), ${f1(mlg)} kg (${f1(lbmPct)}%)</div>
-        <div style="font-size:8pt;color:#374151;margin-top:3px">Sua massa magra representa tudo que não é gordura: músculos, ossos, órgãos e água. ${immeVal ? `A avaliação pela proporção percentual isolada é insuficiente para adultos acima de 50 anos, pois a composição corporal muda com a idade. O parâmetro mais adequado para o seu perfil é o IMME (índice de massa muscular esquelética), que relaciona o músculo com a sua estatura. Com` : 'Com'} <strong>${immeVal ? `IMME de ${immeVal} kg/m² e` : ''} ${f1(lbmPct)}%</strong> de massa magra, seu resultado está <strong style="color:${cls2color(lbmCls)}">${lbmNarr}</strong>. Preservar a massa muscular ao longo do envelhecimento é o principal objetivo de qualquer intervenção nutricional bem conduzida.</div>
+        <div style="font-size:8pt;color:#374151;margin-top:3px">${(()=>{
+          const intro = immeVal
+            ? 'Sua massa magra representa tudo que não é gordura: músculos, ossos, órgãos e água. A avaliação pela proporção percentual isolada é insuficiente para adultos acima de 50 anos, pois a composição corporal muda com a idade. O parâmetro mais adequado para o seu perfil é o IMME (índice de massa muscular esquelética), que relaciona o músculo com a sua estatura. Com <strong>IMME de ' + immeVal + ' kg/m² e ' + f1(lbmPct) + '%</strong> de massa magra,'
+            : 'Sua massa magra representa tudo que não é gordura: músculos, ossos, órgãos e água. Com <strong>' + f1(lbmPct) + '%</strong> de massa magra,';
+          return intro + ' seu resultado está <strong style="color:' + cls2color(lbmCls) + '">' + lbmNarr + '</strong>. Preservar a massa muscular ao longo do envelhecimento é o principal objetivo de qualquer intervenção nutricional bem conduzida.';
+        })()}</div>
       </div>
     </div>
   </div>
