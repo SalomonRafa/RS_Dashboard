@@ -1496,7 +1496,7 @@ function calcular() {
   else if (ossoFonte==='estimado') msgs.push(`Osso: ${f2(osso)} kg (12% da massa)`);
   if (muscFonte==='calculado') msgs.push(`Músculo: ${f2(musculo)} kg (MLG − vísceras − osso)`);
   const ban=el('inf-banner');
-  if (msgs.length){ban.style.display='block';ban.innerHTML=`<strong>Valores estimados automaticamente</strong> — ${msgs.join(' · ')}`;}
+  if (msgs.length){ban.style.display='block';ban.innerHTML=`<strong>Valores estimados automaticamente:</strong> ${msgs.join(' · ')}`;}
   else ban.style.display='none';
 
   // Header
@@ -2258,8 +2258,8 @@ function gerarSVGComposicao(gordPct, muscPct, viscPct, ossoPct, massa, gordKg, m
              <text x="${(cx+cw/2).toFixed(1)}" y="${lY+25}" text-anchor="middle" fill="#64748b" font-size="8">${s.kg.toFixed(2)} kg</text>
              <text x="${(cx+cw/2).toFixed(1)}" y="${lY+36}" text-anchor="middle" fill="#94a3b8" font-size="7">${s.label}</text>`;
   });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W1}" height="${H1}" style="font-family:'DM Sans',sans-serif">
-    <rect width="${W1}" height="${H1}" fill="#f8fafc" rx="6"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="font-family:'DM Sans',sans-serif">
+    <rect width="${W}" height="${H}" fill="#f8fafc" rx="6"/>
     <g>${bars}</g><g>${legend}</g>
   </svg>`;
 }
@@ -2424,7 +2424,7 @@ function gerarHTMLRelatorio() {
   }).join('');
 
   const notas=[];
-  if(el('inf-banner').style.display!=='none') notas.push(el('inf-banner').textContent.replace('Valores estimados automaticamente: ',''));
+  if(el('inf-banner').style.display!=='none') notas.push(el('inf-banner').textContent.replace('Valores estimados automaticamente: ','').replace('Valores estimados automaticamente — ',''));
 
   return `
 <div class="laudo-actions">
@@ -2641,16 +2641,18 @@ function gerarHTMLRelatorio() {
 </div>`;
 }
 
-if (!CanvasRenderingContext2D.prototype.roundRect) {
-  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
-    this.beginPath(); this.moveTo(x+r,y);
-    this.lineTo(x+w-r,y); this.quadraticCurveTo(x+w,y,x+w,y+r);
-    this.lineTo(x+w,y+h-r); this.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-    this.lineTo(x+r,y+h); this.quadraticCurveTo(x,y+h,x,y+h-r);
-    this.lineTo(x,y+r); this.quadraticCurveTo(x,y,x+r,y);
-    this.closePath();
-  };
-}
+try {
+  if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+      this.beginPath(); this.moveTo(x+r,y);
+      this.lineTo(x+w-r,y); this.quadraticCurveTo(x+w,y,x+w,y+r);
+      this.lineTo(x+w,y+h-r); this.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+      this.lineTo(x+r,y+h); this.quadraticCurveTo(x,y+h,x,y+h-r);
+      this.lineTo(x,y+r); this.quadraticCurveTo(x,y,x+r,y);
+      this.closePath();
+    };
+  }
+} catch(e) {}
 
 // ══════════════════════════════════════════════════════════════════
 // INIT
