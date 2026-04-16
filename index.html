@@ -1692,12 +1692,13 @@ function atualizarGET(ctx) {
   if (obj === 'bulk') {
     const muscGanhar=num('meta-musc-kg')||1;
     const diasBulk=num('meta-bulk-dias')||90;
-    // ~2750 kcal por kg de músculo (média da literatura); taxa máx realista
-    const kcalTotal=muscGanhar*2750;
-    const superavitDia=kcalTotal/diasBulk;
-    const ingestaBulk=get+superavitDia;
     const taxaMaxMes=sexo==='F'?0.3:0.6; // kg/mês
-    const taxaRealDias=muscGanhar/taxaMaxMes*30;
+    const taxaRealDias=muscGanhar/taxaMaxMes*30; // Tempo mínimo realista
+    // ~2750 kcal por kg de músculo (média da literatura); usa taxa máx biológica realista
+    const kcalTotal=muscGanhar*2750;
+    const diasParaCalculo=Math.max(diasBulk,taxaRealDias); // Se prazo < realista, usa realista
+    const superavitDia=kcalTotal/diasParaCalculo; // Superávit baseado no tempo REAL
+    const ingestaBulk=get+superavitDia;
     el('cenarios-wrap').innerHTML=`
       <div class="scen"><div><div class="sname" style="color:var(--tl)">Normocalórica</div><div class="sdesc">Base — GET sem superávit</div></div><div style="text-align:right"><div class="skcal" style="color:var(--tl)">${f0(get)}</div><div class="sunit">kcal/dia</div></div></div>
       <div class="scen on"><div><div class="sname" style="color:var(--gn)">Hipercalórica — Hipertrofia</div><div class="sdesc">Superávit +${f0(superavitDia)} kcal/dia para +${f1(muscGanhar)} kg músculo</div></div><div style="text-align:right"><div class="skcal" style="color:var(--gn)">${f0(ingestaBulk)}</div><div class="sunit">kcal/dia</div></div></div>
@@ -1705,9 +1706,11 @@ function atualizarGET(ctx) {
     el('projecoes-wrap').innerHTML=`
       <div class="srow"><span class="slbl">Superávit diário necessário</span><span class="sval" style="color:var(--gn)">+${f0(superavitDia)} kcal</span></div>
       <div class="srow"><span class="slbl">Músculo a ganhar</span><span class="sval">${f1(muscGanhar)} kg</span></div>
-      <div class="srow"><span class="slbl">Prazo</span><span class="sval">${diasBulk} dias</span></div>
+      <div class="srow"><span class="slbl">Prazo inserido</span><span class="sval">${diasBulk} dias</span></div>
       <div class="srow"><span class="slbl">Taxa máx. natural (${sexo==='F'?'F':'M'})</span><span class="sval">${taxaMaxMes} kg/mês</span></div>
-      <div class="srow" style="border:none"><span class="slbl">Tempo mínimo realista<small>Na taxa máxima natural</small></span><span class="sval" style="color:var(--gn)">${f0(taxaRealDias)} dias</span></div>`;
+      <div class="srow" style="border:none"><span class="slbl">Tempo mínimo realista<small>Na taxa máxima natural</small></span><span class="sval" style="color:var(--gn)">${f0(taxaRealDias)} dias</span></div>
+      ${diasBulk<taxaRealDias?`<div style="margin-top:12px;padding:10px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:3px;font-size:12px;color:#78350f"><strong>Nota:</strong> O prazo inserido (${diasBulk}d) é menor que o tempo biologicamente realista (${f0(taxaRealDias)}d). O superávit foi ajustado para refletir a taxa máxima natural de síntese proteica.</div>`:''}`;
+
     el('warn-deficit').style.display='none';
     return renderChart();
   }
