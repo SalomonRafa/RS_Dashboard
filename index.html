@@ -1039,9 +1039,17 @@ function autoCalcCorte() {
 
   // Se temos %G atual e %G alvo, calcula gordura a perder preservando MLG
   if (!gordKgManual && window._ctx) {
-    const { massa, gordKg, mlg } = window._ctx;
+    const { massa, gordKg, gordPct, mlg } = window._ctx;
     const metaGordPct = num('meta-gord') / 100;
     if (!isNaN(metaGordPct) && metaGordPct > 0 && metaGordPct < 1) {
+      if (metaGordPct >= gordPct / 100) {
+        // %G alvo ≥ %G atual: meta inválida em modo Cut
+        el('meta-gord-kg').value = '';
+        el('gord-alvo-calc').textContent = `%G alvo deve ser menor que o atual (${f1(gordPct)}%)`;
+        el('gord-alvo-calc').style.color = 'var(--rs)';
+        return;
+      }
+      el('gord-alvo-calc').style.color = 'var(--tl)';
       // Novo peso = MLG / (1 - %G_meta) → preserva MLG integralmente
       const novoPeso  = mlg / (1 - metaGordPct);
       const gordPerder = gordKg - (novoPeso * metaGordPct);
@@ -1134,10 +1142,20 @@ function toggleDiam() {
 }
 
 function calcOssoFaulkner() {
-  const b=num('fx-biest'),u=num('fx-biep-u'),f=num('fx-biep-f'),t=num('fx-torn');
-  if ([b,u,f,t].some(isNaN)) return null;
-  const A=b/10,B=u/10,C=f/10,D=t/10;
-  return 3.02*Math.pow((A*A*B*C*D)/1000,0.712);
+  // Equação de Von Döbeln (1964), modificada por Rocha (1975)
+  // MO (kg) = 3,02 × (H² × D_punho × D_fêmur × 400)^0,712
+  // H = estatura (m) | D_punho = diâmetro biestiloide (m) | D_fêmur = diâmetro biepicondiliano fêmur (m)
+  // Fonte: Rocha MSL (1975) Peso ósseo do brasileiro de ambos os sexos de 17 a 25 anos.
+  //        Arq Anat Antrop I:445-451.
+  // Nota: biepicondiliano úmero e tornozelo não são usados por esta equação.
+  const b    = num('fx-biest');    // biestiloide (punho), mm
+  const f    = num('fx-biep-f');   // biepicondiliano fêmur, mm
+  const altCm= num('fx-altura');   // estatura, cm
+  if ([b, f, altCm].some(isNaN) || altCm <= 0 || b <= 0 || f <= 0) return null;
+  const H  = altCm / 100;   // m
+  const Dw = b     / 1000;  // m
+  const Df = f     / 1000;  // m
+  return 3.02 * Math.pow(H * H * Dw * Df * 400, 0.712);
 }
 
 // Estimativa osso por sexo e faixa etária (compartimento completo: mineral + matriz + água óssea)
@@ -1222,8 +1240,8 @@ const EQ = {
     desc:'Mais precisa quando há massa magra confiável. Usa MLG como base.',
     calc:(p,a,i,s,mlg)=>mlg?500+22*mlg:null },
   planilha:   { label:'Var. Multicompartimental', req:'MLG desagregada', ideal:'Quando há todos os compartimentos', tagC:'#a855f7',
-    desc:'Pondera gordura como metabolicamente ativa (6,5 kcal/kg). Fórmula: 370 + 21,6×MLM + 6,5×G.',
-    calc:(p,a,i,s,mlg,visc,osso,musc,gord)=>(visc&&osso&&musc&&gord)?370+21.6*(visc+osso+musc)+6.5*gord:null },
+    desc:'Pondera tecidos por taxa metabólica específica (Elia 1992): 21,6 kcal/kg MLM + 4,5 kcal/kg gordura. Fórmula: 370 + 21,6×MLM + 4,5×G.',
+    calc:(p,a,i,s,mlg,visc,osso,musc,gord)=>(visc&&osso&&musc&&gord)?370+21.6*(visc+osso+musc)+4.5*gord:null },
   katch:      { label:'Katch-McArdle (1996)', req:'MLG', ideal:'Quando há MLG mensurado', tagC:'#3b82f6',
     desc:'Fórmula clássica por massa magra: 370 + 21,6 × MLG.',
     calc:(p,a,i,s,mlg)=>mlg?370+21.6*mlg:null },
@@ -1236,8 +1254,8 @@ const EQ = {
   harris:     { label:'Harris-Benedict rev. (1984)', req:'Peso, estatura, idade, sexo', ideal:'Referência histórica — tende a superestimar', tagC:'#64748b',
     desc:'Revisão de Roza & Shizgal. Clássica mas pode superestimar em sedentários.',
     calc:(p,a,i,s)=>s==='M'?88.362+13.397*p+4.799*a-5.677*i:447.593+9.247*p+3.098*a-4.330*i },
-  fao:        { label:'FAO/OMS/UNU (2004)', req:'Peso, estatura, idade, sexo', ideal:'Idosos e populações diversas', tagC:'#22c55e',
-    desc:'Estratificada por faixa etária. Recomendada para >60 anos e populações mistas.',
+  fao:        { label:'Schofield (1985) / FAO-WHO-UNU', req:'Peso, estatura, idade, sexo', ideal:'Idosos e populações diversas', tagC:'#22c55e',
+    desc:'Equações de Schofield (1985), adotadas pelo relatório FAO/WHO/UNU (1985). Estratificadas por faixa etária. Recomendadas para >60 anos e populações mistas.',
     calc:(p,a,i,s)=>{ const h=a/100; if(s==='M'){ if(i<=30)return 15.4*p-27.0*h+717; if(i<=60)return 11.3*p+16.0*h+901; return 8.8*p+1128.0*h-1071; } else { if(i<=30)return 13.3*p+334.0*h+35; if(i<=60)return 8.7*p-25.0*h+865; return 9.2*p+637.0*h-302; } } },
   henry:      { label:'Henry & Rees (1991)', req:'Peso, idade, sexo', ideal:'Brasileiros e populações tropicais', tagC:'#f43f5e',
     desc:'Calibrada para populações tropicais. Boa adequação para brasileiros de todas as idades.',
@@ -1478,7 +1496,7 @@ function calcular() {
   const oIn=num('av-osso');
   let osso, ossoFonte;
   if (!isNaN(oIn)&&oIn>0&&ossoManual){ osso=oIn; ossoFonte='manual'; }
-  else if (faulkner!==null){ osso=faulkner; ossoFonte='faulkner'; el('av-osso').value=faulkner.toFixed(2); el('av-osso').className='i inf'; el('osso-src').textContent='(Faulkner)'; }
+  else if (faulkner!==null){ osso=faulkner; ossoFonte='rocha'; el('av-osso').value=faulkner.toFixed(2); el('av-osso').className='i inf'; el('osso-src').textContent='(Von Döbeln/Rocha)'; }
   else { osso=estimarOsso(massa,sexo,idade); ossoFonte='estimado'; el('av-osso').value=osso.toFixed(2); el('av-osso').className='i inf';
     const pct=sexo==='M'?(idade>=50?13:15):(idade>=50?10:12);
     el('osso-src').textContent=`(${pct}% — ${sexo==='M'?'M':'F'}${idade>=50?', 50+':''})`; }
@@ -1492,8 +1510,8 @@ function calcular() {
   // Banner
   const msgs=[];
   if (viscFonte==='estimado') msgs.push(`Vísceras: ${f2(visceral)} kg (${sexo==='F'?'21':'24'}% da massa)`);
-  if (ossoFonte==='faulkner') msgs.push(`Osso: ${f2(osso)} kg (Faulkner)`);
-  else if (ossoFonte==='estimado') msgs.push(`Osso: ${f2(osso)} kg (12% da massa)`);
+  if (ossoFonte==='rocha') msgs.push(`Osso: ${f2(osso)} kg (Von Döbeln/Rocha)`);
+  else if (ossoFonte==='estimado') { const pctOsso=sexo==='M'?(idade>=50?13:15):(idade>=50?10:12); msgs.push(`Osso: ${f2(osso)} kg (${pctOsso}% da massa — estimado por sexo/idade)`); }
   if (muscFonte==='calculado') msgs.push(`Músculo: ${f2(musculo)} kg (MLG − vísceras − osso)`);
   const ban=el('inf-banner');
   if (msgs.length){ban.style.display='block';ban.innerHTML=`<strong>Valores estimados automaticamente:</strong> ${msgs.join(' · ')}`;}
@@ -1523,7 +1541,7 @@ function calcular() {
   el('v-mlg').textContent   = f1(mlg)+' kg';
   el('v-musc').textContent  = f2(musculo)+' kg'+(muscFonte!=='manual'?' *':'');
   el('v-visc').textContent  = f2(visceral)+' kg';
-  el('v-osso').textContent  = f2(osso)+' kg'+(ossoFonte!=='manual'?' *':'')+( ossoFonte==='faulkner'?' (Faulkner)':ossoFonte==='estimado'?' (estimado)':'');
+  el('v-osso').textContent  = f2(osso)+' kg'+(ossoFonte!=='manual'?' *':'')+( ossoFonte==='rocha'?' (Von Döbeln/Rocha)':ossoFonte==='estimado'?' (estimado)':'');
   el('v-imc').textContent   = f1(imc);
   const altM_cls = alt > 3 ? alt / 100 : alt;
   const [lL,lC]=classLBM(lbmPct, sexo, idade, musculo, altM_cls);
@@ -1617,7 +1635,7 @@ function atualizarGET(ctx) {
     {n:`TMB — ${EQ[eqSel].label}`,k:tmb,c:'#3b82f6'},
     {n:`NEAT — movimento do dia a dia (${(neat_pct*100).toFixed(0)}% TMB)`,k:neat,c:'#6366f1'},
     {n:exLabel,k:exKcal,c:'#14b8a6'},
-    {n:`ETA — digestão e absorção (${(eta_pct*100).toFixed(0)}% TMB)`,k:eta,c:'#f59e0b'},
+    {n:`ETA — digestão e absorção (${(eta_pct*100).toFixed(0)}% GET)`,k:eta,c:'#f59e0b'},
     {n:'GET Total',k:get,c:''},
   ].map((r,i)=>`<tr>
     <td style="color:var(--lb)">${r.n}</td>
@@ -1693,21 +1711,25 @@ function atualizarGET(ctx) {
     const muscGanhar=num('meta-musc-kg')||1;
     const diasBulk=num('meta-bulk-dias')||90;
     const taxaMaxMes=sexo==='F'?0.3:0.6; // kg/mês
-    // Helms et al. 2014: +300-500 kcal/dia para hipertrofia. Usa 350 como mediana.
-    const superavitDiaHelms=350;
-    const ingestaBulk=get+superavitDiaHelms;
+    const taxaRealDias=muscGanhar/taxaMaxMes*30; // Tempo mínimo realista
+    // ~2750 kcal por kg de músculo (média da literatura); usa taxa máx biológica realista
+    const kcalTotal=muscGanhar*2750;
+    const diasParaCalculo=Math.max(diasBulk,taxaRealDias); // Se prazo < realista, usa realista
+    const superavitDia=kcalTotal/diasParaCalculo; // Superávit baseado no tempo REAL
+    const ingestaBulk=get+superavitDia;
     el('cenarios-wrap').innerHTML=`
       <div class="scen"><div><div class="sname" style="color:var(--tl)">Normocalórica</div><div class="sdesc">Base — GET sem superávit</div></div><div style="text-align:right"><div class="skcal" style="color:var(--tl)">${f0(get)}</div><div class="sunit">kcal/dia</div></div></div>
-      <div class="scen on"><div><div class="sname" style="color:var(--gn)">Hipercalórica — Hipertrofia</div><div class="sdesc">Superávit +${f0(superavitDiaHelms)} kcal/dia para ganho muscular</div></div><div style="text-align:right"><div class="skcal" style="color:var(--gn)">${f0(ingestaBulk)}</div><div class="sunit">kcal/dia</div></div></div>
+      <div class="scen on"><div><div class="sname" style="color:var(--gn)">Hipercalórica — Hipertrofia</div><div class="sdesc">Superávit +${f0(superavitDia)} kcal/dia para +${f1(muscGanhar)} kg músculo</div></div><div style="text-align:right"><div class="skcal" style="color:var(--gn)">${f0(ingestaBulk)}</div><div class="sunit">kcal/dia</div></div></div>
       <div class="scen"><div><div class="sname" style="color:var(--ac)">Intervenção (kcal/MLG)</div><div class="sdesc">${kcalLBM} kcal × ${f1(mlg)} kg MLG</div></div><div style="text-align:right"><div class="skcal" style="color:var(--ac)">${f0(kcalLBM*mlg)}</div><div class="sunit">kcal/dia</div></div></div>`;
     el('projecoes-wrap').innerHTML=`
-      <div class="srow"><span class="slbl">Superávit diário (Helms 2014)</span><span class="sval" style="color:var(--gn)">+${f0(superavitDiaHelms)} kcal</span></div>
-      <div class="srow"><span class="slbl">Ingestão energética total</span><span class="sval" style="color:var(--gn)">${f0(ingestaBulk)} kcal/dia</span></div>
-      <div class="srow"><span class="slbl">Protocolo nutricional</span><span class="sval">Proteína 1.6-2.2 g/kg/dia</span></div>
-      <div class="srow"><span class="slbl">Meta de ganho muscular</span><span class="sval">${f1(muscGanhar)} kg</span></div>
+      <div class="srow"><span class="slbl">Superávit diário necessário</span><span class="sval" style="color:var(--gn)">+${f0(superavitDia)} kcal</span></div>
+      <div class="srow"><span class="slbl">Músculo a ganhar</span><span class="sval">${f1(muscGanhar)} kg</span></div>
+      <div class="srow"><span class="slbl">Prazo inserido</span><span class="sval">${diasBulk} dias</span></div>
       <div class="srow"><span class="slbl">Taxa máx. natural (${sexo==='F'?'F':'M'})</span><span class="sval">${taxaMaxMes} kg/mês</span></div>
-      <div class="srow" style="border:none"><span class="slbl">Duração estimada na taxa máxima</span><span class="sval" style="color:var(--gn)">${f0(muscGanhar/taxaMaxMes*30)} dias</span></div>
-      <div style="margin-top:12px;padding:10px;background:#dbeafe;border-left:3px solid #3b82f6;border-radius:3px;font-size:11px;color:#1e40af"><strong>Fonte:</strong> Helms et al. (2014). Revisão sistemática em hipertrofia muscular. Superávit de 300-500 kcal/dia com treino adequado.</div>`;
+      <div class="srow" style="border:none"><span class="slbl">Tempo mínimo realista<small>Na taxa máxima natural</small></span><span class="sval" style="color:var(--gn)">${f0(taxaRealDias)} dias</span></div>
+      ${diasBulk<taxaRealDias?`<div style="margin-top:12px;padding:10px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:3px;font-size:12px;color:#78350f"><strong>Nota:</strong> O prazo inserido (${diasBulk}d) é menor que o tempo biologicamente realista (${f0(taxaRealDias)}d). O superávit foi ajustado para refletir a taxa máxima natural de síntese proteica.</div>`:''}`;
+
+    el('warn-deficit').style.display='none';
     return renderChart();
   }
 
@@ -1754,7 +1776,10 @@ function atualizarGET(ctx) {
   }
 
   // ── Alpert (2005): taxa máxima de oxidação de gordura ──
-  const defMaxAlpert = gordKg * 290;
+  // Fonte: Alpert SS (2005) J Theor Biol 233:1-13.
+  // Valor publicado: 290 ± 25 kJ/kg/dia — o código anterior usava 290 como kcal (erro de unidade).
+  // Conversão correta: 290 kJ ÷ 4,184 = 69,3 kcal/kg gordura/dia.
+  const defMaxAlpert = gordKg * 69.3;
   const defMaxSeguro = Math.min(defMaxAlpert, get * 0.40,
                         get - (sexo === 'F' ? 1200 : 1500));
   const defAlertado  = defDia > defMaxSeguro;
@@ -1890,7 +1915,7 @@ function renderCmpTMB(vals) {
   el('cmp-tbody').innerHTML=Object.entries(EQ).map(([k,eq])=>{
     const tmb=vals[k];
     if(!tmb||isNaN(tmb))return`<tr><td style="color:var(--mu)">${eq.label}</td><td colspan="3" style="color:var(--mu);font-size:10px;text-align:center">dados insuficientes</td></tr>`;
-    const get=tmb*(1+neat+0.09+eta);
+    const baseMetab=tmb*(1+neat+0.09); const get=baseMetab/(1-eta);
     return`<tr ${k===eqSel?'style="background:rgba(59,130,246,.06)"':''}>
       <td>${eq.label}${k===eqSel?' <span style="color:var(--ac);font-size:9px">&#9679; ativa</span>':''}</td>
       <td style="color:var(--mu);font-size:10px">${eq.ideal}</td>
@@ -2348,11 +2373,18 @@ function gerarHTMLRelatorio() {
   // Bug #1 aplicado também ao relatório: GET = baseMetab / (1 - eta_pct)
   const get      = tmbAtiva ? (tmbAtiva + tmbAtiva*neat_pct + exKcal) / (1 - eta_pct) : null;
 
-  const gPerder = num('meta-gord-kg')||0, dias = num('meta-dias')||60;
-  // Bug #4/#5 aplicado ao relatório: densReal em vez de 7700 fixo
+  const gPerder = num('meta-gord-kg')||0;
+  // Bug #4 corrigido: meta-dias não existe no formulário — usa lógica de ritmo idêntica à atualizarGET
   const fracGordR  = gordKg / (gordKg + 10.4);
   const densRealR  = fracGordR * 9441 + (1 - fracGordR) * 1816;
-  const defDia  = gPerder>0 ? gPerder*densRealR/dias : 0;
+  const ritmoR = el('meta-ritmo')?.value || 'moderado';
+  let defDia;
+  if (ritmoR === 'manual') {
+    defDia = num('meta-deficit') || 500;
+  } else {
+    const ppMesR = { conservador:0.5, moderado:1.0, agressivo:1.5 }[ritmoR] || 1.0;
+    defDia = (ppMesR / 100 * massa * densRealR) / 30;
+  }
   const hipI    = get ? get-defDia : null;
   const intv    = (num('meta-kcal-lbm')||32)*mlg;
   const novoGPct= gPerder>0 ? (gordKg-gPerder)/(massa-gPerder)*100 : null;
@@ -2372,9 +2404,9 @@ function gerarHTMLRelatorio() {
   // Gordura
   const gordNarr = (() => {
     const ref = sexo==='F'
-      ? ['muito baixo para saúde hormonal e óssea','excelente, dentro da faixa ideal para saúde e desempenho','bom, levemente acima do ideal, mas dentro de parâmetros saudáveis','moderadamente elevado. O risco metabólico começa a aumentar nessa faixa','elevado, associado a maior risco cardiovascular e metabólico']
-      : ['muito baixo, podendo comprometer a função hormonal e imunológica','excelente, dentro da faixa atlética ideal','bom, dentro dos parâmetros saudáveis','moderadamente elevado, com acúmulo progressivo de gordura visceral','elevado. Atenção ao risco cardiovascular e metabólico'];
-    const idx = gordCls==='Excelente'?1:gordCls==='Bom'?2:gordCls==='Regular'?3:gordCls==='Fraco'?4:gordCls==='Muito fraco'?4:0;
+      ? ['muito baixo para saúde hormonal e óssea','excelente, dentro da faixa ideal para saúde e desempenho','bom, levemente acima do ideal, mas dentro de parâmetros saudáveis','moderadamente elevado. O risco metabólico começa a aumentar nessa faixa','elevado, com risco metabólico crescente. Revisão dos hábitos alimentares e de treino é recomendada','muito elevado, associado a risco cardiovascular e metabólico significativo']
+      : ['muito baixo, podendo comprometer a função hormonal e imunológica','excelente, dentro da faixa atlética ideal','bom, dentro dos parâmetros saudáveis','moderadamente elevado, com acúmulo progressivo de gordura visceral','elevado, com risco metabólico crescente. Intervenção nutricional recomendada','muito elevado. Atenção ao risco cardiovascular e metabólico'];
+    const idx = gordCls==='Excelente'?1:gordCls==='Bom'?2:gordCls==='Regular'?3:gordCls==='Fraco'?4:gordCls==='Muito fraco'?5:0;
     return ref[Math.min(idx,ref.length-1)];
   })();
 
@@ -2390,7 +2422,7 @@ function gerarHTMLRelatorio() {
   // Narrativa MLG com IMME quando disponível
   const immeVal = (musculo && alt) ? (musculo / ((alt/100) * (alt/100))).toFixed(1) : null;
   const immeRef = immeVal
-    ? ` O índice de massa muscular esquelética (IMME) calculado é de ${immeVal} kg/m², bem acima do limiar de sarcopenia estabelecido pela EWGSOP2 (2019): abaixo de ${sexo==='F'?'5,5':'7,0'} kg/m² em homens.`
+    ? ` O índice de massa muscular esquelética (IMME) calculado é de ${immeVal} kg/m², acima do limiar de sarcopenia estabelecido pela EWGSOP2 (2019): abaixo de ${sexo==='F'?'5,5':'7,0'} kg/m² em ${sexo==='F'?'mulheres':'homens'}.`
     : '';
   const lbmNarr = lbmCls.startsWith('Excelente') ? 'em nível excelente para a faixa etária, com boa preservação de tecido metabolicamente ativo' + immeRef
     : lbmCls.startsWith('Bom') ? 'em nível bom para a faixa etária' + immeRef
