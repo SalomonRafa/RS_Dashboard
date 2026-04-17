@@ -767,9 +767,16 @@ svg text{font-family:'DM Sans',sans-serif}
     <div id="params-bulk" style="display:none;grid-template-columns:1fr 1fr;gap:8px">
       <div class="ig"><span class="il">Músculo a ganhar (kg)</span><input class="i" id="meta-musc-kg" type="number" step="0.1" placeholder="ex: 2" oninput="recalcCenarios()"></div>
       <div class="ig"><span class="il">Prazo (dias)</span><input class="i" id="meta-bulk-dias" type="number" step="1" value="90" placeholder="dias" oninput="recalcCenarios()"></div>
+      <div class="ig" style="grid-column:span 2">
+        <span class="il">Nível de treino <span class="itag opt">(ajusta taxa máx. natural)</span></span>
+        <select class="i" id="bulk-nivel" onchange="recalcCenarios()">
+          <option value="iniciante">Iniciante — até 2 anos (H: 0,7 kg/mês · M: 0,35 kg/mês)</option>
+          <option value="intermediario" selected>Intermediário — 2 a 5 anos (H: 0,5 kg/mês · M: 0,25 kg/mês)</option>
+          <option value="avancado">Avançado — mais de 5 anos (H: 0,25 kg/mês · M: 0,12 kg/mês)</option>
+        </select>
+      </div>
       <div style="grid-column:span 2;font-size:9px;color:var(--mu);line-height:1.5;padding:6px 8px;background:var(--sf2);border-radius:6px">
-        Taxa natural de ganho: <strong style="color:var(--tl)">0,2-0,4 kg/mês (F)</strong> &nbsp;|&nbsp; <strong style="color:var(--ac)">0,4-0,8 kg/mês (M)</strong><br>
-        Superávit necessário: ~2.500-3.000 kcal por kg de músculo ganho
+        Taxa natural de ganho varia com o tempo de treino. Quanto mais experiente, mais próximo do teto genético e menor o ganho mensal esperado.
       </div>
     </div>
 
@@ -1710,7 +1717,10 @@ function atualizarGET(ctx) {
   if (obj === 'bulk') {
     const muscGanhar=num('meta-musc-kg')||1;
     const diasBulk=num('meta-bulk-dias')||90;
-    const taxaMaxMes=sexo==='F'?0.3:0.6; // kg/mês
+    const nivel = el('bulk-nivel')?.value || 'intermediario';
+    const taxaMaxMes = sexo==='F'
+      ? ({iniciante:0.35, intermediario:0.25, avancado:0.12}[nivel] || 0.25)
+      : ({iniciante:0.70, intermediario:0.50, avancado:0.25}[nivel] || 0.50); // kg/mês
     const taxaRealDias=muscGanhar/taxaMaxMes*30; // Tempo mínimo realista
     // ~2750 kcal por kg de músculo (média da literatura); usa taxa máx biológica realista
     const kcalTotal=muscGanhar*2750;
@@ -1725,7 +1735,7 @@ function atualizarGET(ctx) {
       <div class="srow"><span class="slbl">Superávit diário necessário</span><span class="sval" style="color:var(--gn)">+${f0(superavitDia)} kcal</span></div>
       <div class="srow"><span class="slbl">Músculo a ganhar</span><span class="sval">${f1(muscGanhar)} kg</span></div>
       <div class="srow"><span class="slbl">Prazo inserido</span><span class="sval">${diasBulk} dias</span></div>
-      <div class="srow"><span class="slbl">Taxa máx. natural (${sexo==='F'?'F':'M'})</span><span class="sval">${taxaMaxMes} kg/mês</span></div>
+      <div class="srow"><span class="slbl">Taxa máx. natural (${sexo==='F'?'F':'M'} · ${nivel})</span><span class="sval">${taxaMaxMes} kg/mês</span></div>
       <div class="srow" style="border:none"><span class="slbl">Tempo mínimo realista<small>Na taxa máxima natural</small></span><span class="sval" style="color:var(--gn)">${f0(taxaRealDias)} dias</span></div>
       ${diasBulk<taxaRealDias?`<div style="margin-top:12px;padding:10px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:3px;font-size:12px;color:#78350f"><strong>Nota:</strong> O prazo inserido (${diasBulk}d) é menor que o tempo biologicamente realista (${f0(taxaRealDias)}d). O superávit foi ajustado para refletir a taxa máxima natural de síntese proteica.</div>`:''}`;
 
@@ -1915,7 +1925,10 @@ function renderCmpTMB(vals) {
   el('cmp-tbody').innerHTML=Object.entries(EQ).map(([k,eq])=>{
     const tmb=vals[k];
     if(!tmb||isNaN(tmb))return`<tr><td style="color:var(--mu)">${eq.label}</td><td colspan="3" style="color:var(--mu);font-size:10px;text-align:center">dados insuficientes</td></tr>`;
-    const baseMetab=tmb*(1+neat+0.09); const get=baseMetab/(1-eta);
+    const massa = window._ctx ? window._ctx.massa : 0;
+    const exKcal = window._ctx ? getExKcal(tmb, massa) : tmb * 0.09;
+    const baseMetab = tmb + tmb * neat + exKcal;
+    const get = baseMetab / (1 - eta);
     return`<tr ${k===eqSel?'style="background:rgba(59,130,246,.06)"':''}>
       <td>${eq.label}${k===eqSel?' <span style="color:var(--ac);font-size:9px">&#9679; ativa</span>':''}</td>
       <td style="color:var(--mu);font-size:10px">${eq.ideal}</td>
@@ -1931,10 +1944,10 @@ function renderCmpTMB(vals) {
 function renderHistRows() {
   el('hist-rows').innerHTML = histData.map((h,i) => `
     <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 28px;gap:4px;margin-bottom:4px">
-      <input class="i" style="font-size:10px;padding:5px 7px" value="${h.data}" onchange="histData[${i}].data=this.value;renderComparativo()">
-      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.peso}" onchange="histData[${i}].peso=parseFloat(this.value);renderComparativo()">
-      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.gord}" onchange="histData[${i}].gord=parseFloat(this.value);renderComparativo()">
-      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.musculo}" onchange="histData[${i}].musculo=parseFloat(this.value);renderComparativo()">
+      <input class="i" style="font-size:10px;padding:5px 7px" value="${h.data}" onchange="histData[${i}].data=this.value;renderComparativo();renderChart()">
+      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.peso}" onchange="histData[${i}].peso=parseFloat(this.value);renderComparativo();renderChart()">
+      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.gord}" onchange="histData[${i}].gord=parseFloat(this.value);renderComparativo();renderChart()">
+      <input class="i" style="font-size:10px;padding:5px 7px" type="number" step="0.1" value="${h.musculo}" onchange="histData[${i}].musculo=parseFloat(this.value);renderComparativo();renderChart()">
       <button class="btn bs" style="padding:5px;font-size:10px" onclick="removeHist(${i})">✕</button>
     </div>`).join('');
   renderComparativo();
@@ -2305,10 +2318,10 @@ function gerarSVGHistorico() {
       const x=gap+i*(bW+gap), bh=(v.v/maxV)*iH, y=P.t+iH-bh;
       bars+=`<rect x="${x}" y="${y.toFixed(1)}" width="${bW}" height="${bh.toFixed(1)}" rx="4" fill="${v.c}" fill-opacity="0.8"/>
              <text x="${(x+bW/2).toFixed(1)}" y="${(y-4).toFixed(1)}" text-anchor="middle" fill="${v.c}" font-size="9" font-weight="700">${v.v.toFixed(1)}</text>
-             <text x="${(x+bW/2).toFixed(1)}" y="${H-8}" text-anchor="middle" fill="#64748b" font-size="8">${v.l}</text>`;
+             <text x="${(x+bW/2).toFixed(1)}" y="${H1-8}" text-anchor="middle" fill="#64748b" font-size="8">${v.l}</text>`;
     });
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="font-family:'DM Sans',sans-serif">
-      <rect width="${W}" height="${H}" fill="#f8fafc" rx="6"/>
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W1}" height="${H1}" style="font-family:'DM Sans',sans-serif">
+      <rect width="${W1}" height="${H1}" fill="#f8fafc" rx="6"/>
       <text x="10" y="12" fill="#94a3b8" font-size="8">Avaliação: ${d.data||'atual'}</text>
       <g>${bars}</g></svg>`;
   }
@@ -2422,8 +2435,11 @@ function gerarHTMLRelatorio() {
   // MLG/LBM
   // Narrativa MLG com IMME quando disponível
   const immeVal = (musculo && alt) ? (musculo / ((alt/100) * (alt/100))).toFixed(1) : null;
+  const immeSarThr = sexo === 'F' ? 5.5 : 7.0;
   const immeRef = immeVal
-    ? ` O índice de massa muscular esquelética (IMME) calculado é de ${immeVal} kg/m², acima do limiar de sarcopenia estabelecido pela EWGSOP2 (2019): abaixo de ${sexo==='F'?'5,5':'7,0'} kg/m² em ${sexo==='F'?'mulheres':'homens'}.`
+    ? (parseFloat(immeVal) >= immeSarThr
+        ? ` O índice de massa muscular esquelética (IMME) calculado é de ${immeVal} kg/m², acima do limiar de sarcopenia estabelecido pela EWGSOP2 (2019): abaixo de ${sexo==='F'?'5,5':'7,0'} kg/m² em ${sexo==='F'?'mulheres':'homens'}.`
+        : ` O índice de massa muscular esquelética (IMME) calculado é de ${immeVal} kg/m², abaixo do limiar de sarcopenia estabelecido pela EWGSOP2 (2019): ${sexo==='F'?'5,5':'7,0'} kg/m² em ${sexo==='F'?'mulheres':'homens'}. Intervenção prioritária indicada.`)
     : '';
   const lbmNarr = lbmCls.startsWith('Excelente') ? 'em nível excelente para a faixa etária, com boa preservação de tecido metabolicamente ativo' + immeRef
     : lbmCls.startsWith('Bom') ? 'em nível bom para a faixa etária' + immeRef
@@ -2446,7 +2462,9 @@ function gerarHTMLRelatorio() {
   // Equações
   const eqRows = Object.entries(EQ).map(([k,eq]) => {
     const tmb = vals[k];
-    const getE = tmb&&get ? Math.round(tmb*(1+neat_pct+eta_pct)+exKcal) : null;
+    // Bug C corrigido: usar a mesma fórmula de atualizarGET — GET = (TMB + NEAT + Ex) / (1 − η)
+    // exKcal deve ser calculado por TMB da equação, não pela equação ativa
+    const getE = tmb ? Math.round((tmb + tmb*neat_pct + getExKcal(tmb, massa)) / (1 - eta_pct)) : null;
     return `<tr ${k===eqSel?'style="background:#eff6ff"':''}>
       <td>${eq.label}${k===eqSel?' <strong style="color:#1d4ed8">✓ ativa</strong>':''}</td>
       <td style="color:#64748b;font-size:7.5pt">${eq.ideal}</td>
