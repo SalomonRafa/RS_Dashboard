@@ -2385,6 +2385,7 @@ function gerarHTMLRelatorio() {
     const ppMesR = { conservador:0.5, moderado:1.0, agressivo:1.5 }[ritmoR] || 1.0;
     defDia = (ppMesR / 100 * massa * densRealR) / 30;
   }
+  const dias    = (defDia > 0 && gPerder > 0) ? Math.round(gPerder * densRealR / defDia) : 0;
   const hipI    = get ? get-defDia : null;
   const intv    = (num('meta-kcal-lbm')||32)*mlg;
   const novoGPct= gPerder>0 ? (gordKg-gPerder)/(massa-gPerder)*100 : null;
@@ -2702,9 +2703,4 @@ document.addEventListener('DOMContentLoaded', function() {
     const d   = new Date();
     const pad = n => String(n).padStart(2,'0');
     av.value  = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
-    if (typeof atualizarHeader === 'function') atualizarHeader();
-  }
-});
-</script>
-</body>
-</html>
+    if
