@@ -2703,4 +2703,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const d   = new Date();
     const pad = n => String(n).padStart(2,'0');
     av.value  = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
-    if
+    if (typeof atualizarHeader === 'function') atualizarHeader();
+  }
+});
+</script>
+</body>
+</html>
