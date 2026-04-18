@@ -127,6 +127,16 @@ input.i.calc{color:var(--mu)}
 .eta-opt{border:1px solid var(--bd);border-radius:7px;padding:8px 10px;cursor:pointer;text-align:center;transition:border-color .15s}
 .eta-opt:hover{border-color:var(--am)}.eta-opt.sel{border-color:var(--am);background:rgba(245,158,11,.06)}
 .eta-opt .ep{font-size:15px;font-weight:700;color:var(--am)}.eta-opt .el{font-size:10px;color:var(--mu);margin-top:2px}
+/* ─ MACRO SLIDERS ─ */
+.macro-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.macro-row input[type=range]{flex:1;accent-color:var(--am)}
+.macro-lbl{font-size:10px;color:var(--lb);min-width:72px}
+.macro-pct{font-size:11px;font-weight:700;color:var(--am);min-width:32px;text-align:right}
+.macro-g{font-size:10px;color:var(--mu);min-width:44px;text-align:right}
+.macro-bar{display:flex;height:7px;border-radius:4px;overflow:hidden;margin:8px 0 6px}
+.macro-bar-prot{background:#3b82f6;transition:width .15s}
+.macro-bar-carb{background:#14b8a6;transition:width .15s}
+.macro-bar-fat{background:#f59e0b;transition:width .15s}
 /* ─ CIRC ─ */
 .circ-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 /* ─ RESPONSIVE ─ */
@@ -658,30 +668,52 @@ svg text{font-family:'DM Sans',sans-serif}
           </div>
         </div>
       </div>
-      <!-- ETA -->
+      <!-- ETA / MACROS -->
       <div>
-        <div class="il" style="margin-bottom:6px">ETA — Efeito Térmico dos Alimentos <span style="font-size:9px;color:var(--mu);text-transform:none;letter-spacing:0">(energia que o corpo gasta para digerir)</span></div>
-        <!-- Slider proteína -->
+        <div class="il" style="margin-bottom:6px">ETA — Efeito Térmico dos Alimentos <span style="font-size:9px;color:var(--mu);text-transform:none;letter-spacing:0">(energia gasta para digerir)</span></div>
         <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:8px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:10px;color:var(--lb)">% de proteína na dieta</span>
-            <span id="prot-pct-lbl" style="font-size:11px;font-weight:700;color:var(--am)">25%</span>
+          <div style="font-size:9px;color:var(--mu);margin-bottom:8px">Distribuição de macronutrientes — sliders interdependentes, soma = 100%<span style="font-size:9px;color:var(--mu)"> · gordura mín. 15%</span></div>
+          <!-- Proteína -->
+          <div class="macro-row">
+            <span class="macro-lbl">Proteína</span>
+            <input type="range" id="macro-prot-slider" min="10" max="60" value="25" step="1" oninput="onMacroSlide('prot',this.value)">
+            <span class="macro-pct" id="macro-prot-lbl">25%</span>
+            <span class="macro-g" id="macro-prot-g">—</span>
           </div>
-          <input type="range" id="prot-slider" min="10" max="45" value="25" step="1"
-            style="width:100%;accent-color:var(--am)"
-            oninput="calcEtaFromProt(this.value)">
-          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--mu);margin-top:3px">
-            <span>10% — gordura dominante</span><span>45% — alta proteína</span>
+          <!-- Carboidrato -->
+          <div class="macro-row">
+            <span class="macro-lbl">Carboidrato</span>
+            <input type="range" id="macro-carb-slider" min="10" max="75" value="55" step="1" oninput="onMacroSlide('carb',this.value)">
+            <span class="macro-pct" id="macro-carb-lbl">55%</span>
+            <span class="macro-g" id="macro-carb-g">—</span>
           </div>
-          <div style="margin-top:8px;font-size:9px;color:var(--mu);line-height:1.5">
-            ETA calculado: proteína (20-30%) + carbo (5-10%) + gordura (0-3%)<br>
+          <!-- Gordura -->
+          <div class="macro-row">
+            <span class="macro-lbl">Gordura</span>
+            <input type="range" id="macro-fat-slider" min="15" max="50" value="20" step="1" oninput="onMacroSlide('fat',this.value)">
+            <span class="macro-pct" id="macro-fat-lbl">20%</span>
+            <span class="macro-g" id="macro-fat-g">—</span>
+          </div>
+          <!-- Barra visual -->
+          <div class="macro-bar">
+            <div class="macro-bar-prot" id="macro-bar-prot" style="width:25%"></div>
+            <div class="macro-bar-carb" id="macro-bar-carb" style="width:55%"></div>
+            <div class="macro-bar-fat"  id="macro-bar-fat"  style="width:20%"></div>
+          </div>
+          <div style="display:flex;gap:12px;font-size:9px;color:var(--mu);margin-bottom:8px">
+            <span><span style="display:inline-block;width:8px;height:8px;background:#3b82f6;border-radius:2px;margin-right:3px"></span>Proteína</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:#14b8a6;border-radius:2px;margin-right:3px"></span>Carboidrato</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:2px;margin-right:3px"></span>Gordura</span>
+          </div>
+          <div style="font-size:9px;color:var(--mu);line-height:1.5">
+            ETA calculado (Westerterp 2004): prot × 25% + carbo × 7,5% + gord × 1,5%<br>
             <strong id="eta-breakdown" style="color:var(--tl)">—</strong>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;color:var(--mu)">ETA resultante:</span>
           <input class="i" id="get-eta" type="number" step="0.5" value="10" placeholder="%" style="width:70px" oninput="recalcGET()">
-          <span style="font-size:10px;color:var(--mu)">% da TMB</span>
+          <span style="font-size:10px;color:var(--mu)">% do GET</span>
         </div>
       </div>
     </div>
@@ -881,6 +913,7 @@ svg text{font-family:'DM Sans',sans-serif}
 // ══════════════════════════════════════════════════════════════════
 let modo = 'min', ossoManual = false, muscManual = false, viscManual = false;
 let eqSel = 'cunningham', etaVal = 10, exModo = 'pct';
+let macros = { prot: 25, carb: 55, fat: 20 }; // % — soma = 100
 let metaSel = null; // atividade MET selecionada
 
 let histData = [];
@@ -984,22 +1017,77 @@ function calcMetPreview() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// ETA
+// MACROS + ETA
 // ══════════════════════════════════════════════════════════════════
-function calcEtaFromProt(protPct) {
-  protPct = parseFloat(protPct);
-  el('prot-pct-lbl').textContent = protPct + '%';
-  // Proporção estimada: resto dividido entre carbo e gordura
-  const carbPct  = Math.max(0, Math.min(100 - protPct, 60));
-  const fatPct   = Math.max(0, 100 - protPct - carbPct);
-  // ETA ponderado: prot 25%, carbo 7.5%, gordura 1.5% (médias das faixas)
-  const eta = (protPct * 0.25 + carbPct * 0.075 + fatPct * 0.015) / 100 * 100;
+function onMacroSlide(macro, rawValue) {
+  let val = Math.round(Math.max(0, Math.min(100, parseFloat(rawValue))));
+  const fatMin = 15;
+  let p = macros.prot, c = macros.carb, f = macros.fat;
+
+  if (macro === 'prot') {
+    const remaining = 100 - val;
+    const total_cf = c + f || 1;
+    f = Math.round(f / total_cf * remaining);
+    c = remaining - f;
+    if (f < fatMin) { f = fatMin; c = remaining - fatMin; }
+    p = val;
+  } else if (macro === 'carb') {
+    const remaining = 100 - val;
+    const total_pf = p + f || 1;
+    f = Math.round(f / total_pf * remaining);
+    p = remaining - f;
+    if (f < fatMin) { f = fatMin; p = remaining - fatMin; }
+    c = val;
+  } else {
+    val = Math.max(fatMin, val);
+    const remaining = 100 - val;
+    const total_pc = p + c || 1;
+    p = Math.round(p / total_pc * remaining);
+    c = remaining - p;
+    f = val;
+  }
+
+  // Corrigir desvio de arredondamento
+  const soma = p + c + f;
+  if (soma !== 100) c += (100 - soma);
+
+  macros = { prot: p, carb: c, fat: f };
+  renderMacros();
+}
+
+function renderMacros() {
+  const { prot, carb, fat } = macros;
+
+  el('macro-prot-slider').value = prot;
+  el('macro-carb-slider').value = carb;
+  el('macro-fat-slider').value  = fat;
+
+  el('macro-prot-lbl').textContent = prot + '%';
+  el('macro-carb-lbl').textContent = carb + '%';
+  el('macro-fat-lbl').textContent  = fat + '%';
+
+  el('macro-bar-prot').style.width = prot + '%';
+  el('macro-bar-carb').style.width = carb + '%';
+  el('macro-bar-fat').style.width  = fat + '%';
+
+  // ETA — Westerterp 2004
+  const eta = prot * 0.25 + carb * 0.075 + fat * 0.015;
   const etaRound = Math.round(eta * 10) / 10;
   el('get-eta').value = etaRound;
   etaVal = etaRound;
   el('eta-breakdown').textContent =
-    `Prot ${protPct}% × 25% + Carbo ${carbPct}% × 7,5% + Gord ${fatPct}% × 1,5% = ETA ${etaRound}%`;
+    `Prot ${prot}% × 25% + Carbo ${carb}% × 7,5% + Gord ${fat}% × 1,5% = ETA ${etaRound}%`;
+
+  renderMacroGrams();
   recalcGET();
+}
+
+function renderMacroGrams() {
+  const get = window._lastGET;
+  const { prot, carb, fat } = macros;
+  el('macro-prot-g').textContent = get ? Math.round(get * prot / 100 / 4) + 'g' : '—';
+  el('macro-carb-g').textContent = get ? Math.round(get * carb / 100 / 4) + 'g' : '—';
+  el('macro-fat-g').textContent  = get ? Math.round(get * fat  / 100 / 9) + 'g' : '—';
 }
 
 function recalcGET() {
@@ -1634,6 +1722,8 @@ function atualizarGET(ctx) {
   const get = baseMetab / (1 - eta_pct);
   const eta = get - baseMetab;
 
+  window._lastGET = get;
+  renderMacroGrams();
   el('get-total').textContent=f0(get)+' kcal';
   el('get-formula').textContent=`${EQ[eqSel].label} | NEAT ${(neat_pct*100).toFixed(0)}% · Ex · ETA ${(eta_pct*100).toFixed(0)}%`;
 
@@ -1763,18 +1853,20 @@ function atualizarGET(ctx) {
   const ingHII       = get - defHII;
 
   // Prazo Hipoc I e II para a gordura a perder (se definida), com simulação dinâmica
+  // gPerder = gordura a perder (FAT, não peso total) — conforme autoCalcCorte
   function prazoSimulado(deficit, gordMeta) {
     if (!gordMeta || deficit <= 0) return null;
     const ing  = get - deficit;
-    const traj = simularTrajetoria(massa, gordKg, get, ing, 365);
+    const traj = simularTrajetoria(massa, gordKg, get, ing, 730); // 730d para déficits conservadores
     const fm0  = gordKg - gordMeta;
     const pt   = traj.find(p => p.gord <= fm0);
     return pt ? pt.dia : null;
   }
   const prazoHI  = gPerder > 0 ? prazoSimulado(defHI,  gPerder) : null;
   const prazoHII = gPerder > 0 ? prazoSimulado(defHII, gPerder) : null;
-  const prazoHILinear  = gPerder > 0 ? Math.round(gPerder * densReal / defHI)  : null;
-  const prazoHIILinear = gPerder > 0 ? Math.round(gPerder * densReal / defHII) : null;
+  // Fórmula linear para gordura (não peso total): dias = gordura × 9441 / (déficit × fracGord)
+  const prazoHILinear  = gPerder > 0 && fracGord > 0 ? Math.round(gPerder * 9441 / (defHI  * fracGord)) : null;
+  const prazoHIILinear = gPerder > 0 && fracGord > 0 ? Math.round(gPerder * 9441 / (defHII * fracGord)) : null;
 
   // Bug #5 corrigido: defDia usa densReal (Forbes + Hall 2008), não 7700 fixo
   let defDia;
@@ -1795,11 +1887,16 @@ function atualizarGET(ctx) {
   const defAlertado  = defDia > defMaxSeguro;
 
   // ── Forbes/Hall: partição gordura vs MLG na perda ──
+  // gPerder = gordura a perder (FAT kg), calculado por autoCalcCorte
+  // Forbes (1987): fracGord = fração de gordura por kg de peso total perdido
+  // Para perder gPerder kg de GORDURA, o peso total perdido = gPerder / fracGord
+  // → FFM perdida adicional = gPerder × (fracMLG / fracGord)
   const C_FORBES        = 10.4;
   const fracGord        = gordKg / (gordKg + C_FORBES);
   const fracMLG         = 1 - fracGord;
-  const mlgPerdida      = gPerder > 0 ? gPerder * fracMLG  : 0;
-  const gordPerdidaReal = gPerder > 0 ? gPerder * fracGord : 0;
+  const gordPerdidaReal = gPerder > 0 ? gPerder : 0;                          // = meta de gordura
+  const mlgPerdida      = gPerder > 0 && fracGord > 0
+                            ? gPerder * (fracMLG / fracGord) : 0;              // FFM acompanhante
 
   // ── Simulação dinâmica para o cenário do ritmo selecionado ──
   let diasSim = null;
@@ -1823,13 +1920,15 @@ function atualizarGET(ctx) {
   window._simTrajHII = simularTrajetoria(massa, gordKg, get, ingHII, 90);
 
   // ── Estado final Forbes-ajustado ──
-  const pesoFinal = massa - gPerder;
+  // Peso total perdido = gordura + MLG (não apenas gordura)
+  const pesoTotalPerdido = gordPerdidaReal + mlgPerdida;   // = gPerder / fracGord
+  const pesoFinal = Math.max(30, massa - pesoTotalPerdido);
   const gordFinal = Math.max(0, gordKg - gordPerdidaReal);
-  const mlgFinal  = mlg - mlgPerdida;
+  const mlgFinal  = Math.max(0, mlg - mlgPerdida);
   const bfFinal   = pesoFinal > 0 ? gordFinal / pesoFinal * 100 : gordPctAtual;
 
   // ── Manutenção pós-meta (Hall 2012 + adaptive thermogenesis) ──
-  const pctPeso      = gPerder / massa * 100;
+  const pctPeso      = pesoTotalPerdido / massa * 100;   // % do peso total efetivamente perdido
   const penalThermo  = pctPeso * 5;
   const getManut     = get * Math.pow(Math.max(pesoFinal, 30) / massa, 0.75) - penalThermo;
   const intestaManut = Math.max(getManut, sexo === 'F' ? 1200 : 1500);
@@ -1893,8 +1992,8 @@ function atualizarGET(ctx) {
     </div>
     ${gPerder > 0 ? `
     <div class="srow">
-      <span class="slbl">Forbes: gordura vs MLG perdida<small>Hall (2008) — BF=${f1(gordPctAtual)}% → ${f0(fracGord*100)}%G / ${f0(fracMLG*100)}%MLG por kg</small></span>
-      <span class="sval">${f1(gordPerdidaReal)}kg G + <span style="color:var(--rs)">${f1(mlgPerdida)}kg MLG</span></span>
+      <span class="slbl">Forbes: gordura + MLG perdida<small>BF=${f1(gordPctAtual)}% → para −${f1(gordPerdidaReal)}kg G, perde-se +${f1(mlgPerdida)}kg MLG</small></span>
+      <span class="sval">${f1(gordPerdidaReal)}kg G + <span style="color:var(--rs)">${f1(mlgPerdida)}kg MLG</span> = ${f1(pesoTotalPerdido)}kg total</span>
     </div>
     <div class="srow">
       <span class="slbl">Prazo Hipoc I / Hipoc II<small>simulação dinâmica (Hall 2011)</small></span>
@@ -2723,6 +2822,8 @@ document.addEventListener('DOMContentLoaded', function() {
     av.value  = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
     if (typeof atualizarHeader === 'function') atualizarHeader();
   }
+  // Inicializar sliders de macros com estado padrão
+  if (typeof renderMacros === 'function') renderMacros();
 });
 </script>
 </body>
