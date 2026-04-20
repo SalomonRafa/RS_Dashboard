@@ -777,9 +777,9 @@ svg text{font-family:'DM Sans',sans-serif}
           <span id="ritmo-label" style="font-size:9px"></span>
         </span>
         <select class="i" id="meta-ritmo" onchange="autoCalcCorte()">
-          <option value="conservador">Conservador — 0,5% BF/mês</option>
-          <option value="moderado" selected>Moderado — 1,0% BF/mês</option>
-          <option value="agressivo">Agressivo — 1,5% BF/mês</option>
+          <option value="conservador">Conservador — −250 kcal/dia</option>
+          <option value="moderado" selected>Moderado — −500 kcal/dia</option>
+          <option value="agressivo">Agressivo — −750 kcal/dia</option>
           <option value="manual">Manual — definir déficit</option>
         </select>
       </div>
@@ -1160,7 +1160,7 @@ function autoCalcCorte() {
 }
 
 // pp BF/mês por ritmo
-const RITMO_PP = { conservador: 0.5, moderado: 1.0, agressivo: 1.5 };
+const RITMO_PP = { conservador: 250, moderado: 500, agressivo: 750 }; // kcal/dia de déficit
 
 function recalcCenarios() {
   if (window._ctx) {
@@ -1708,6 +1708,19 @@ function simularTrajetoria(bw0, fm0, get0, ingestao, maxDias) {
   return pts;
 }
 
+// Formata prazo em texto clínico amigável (sem "dias" crus para o paciente)
+function prazoLabelElegante(dias) {
+  if (!dias || dias <= 0) return '—';
+  if (dias <= 13)  return `~${dias} dias`;
+  if (dias <= 27)  return `~${Math.round(dias/7)} semanas`;
+  const m = dias / 30.44;
+  if (dias <= 89) {
+    const mr = Math.round(m * 2) / 2;
+    return `~${mr.toFixed(1).replace('.0','')} ${mr === 1 ? 'mês' : 'meses'}`;
+  }
+  return `~${Math.round(m)} meses`;
+}
+
 function atualizarGET(ctx) {
   const {massa,mlg,visceral,osso,musculo,gordKg,gordPct,sexo}=ctx;
   const vals=window._vals; if(!vals)return;
@@ -1852,51 +1865,51 @@ function atualizarGET(ctx) {
   const ingHI        = get - defHI;
   const ingHII       = get - defHII;
 
-  // Prazo Hipoc I e II para a gordura a perder (se definida), com simulação dinâmica
-  // gPerder = gordura a perder (FAT, não peso total) — conforme autoCalcCorte
+  // ── Forbes/Hall: partição gordura vs MLG (declarado antes de tudo para evitar TDZ) ──
+  // Forbes (1987): fracGord = fração de gordura por kg de peso total perdido
+  const C_FORBES        = 10.4;
+  const fracGord        = gordKg / (gordKg + C_FORBES);
+  const fracMLG         = 1 - fracGord;
+  const gordPerdidaReal = gPerder > 0 ? gPerder : 0;
+  // Para perder gPerder kg de GORDURA → peso total perdido = gPerder / fracGord
+  // FFM perdida acompanhante = gPerder × (fracMLG / fracGord)
+  const mlgPerdida      = gPerder > 0 && fracGord > 0
+                            ? gPerder * (fracMLG / fracGord) : 0;
+
+  // Prazo Hipoc I e II para a gordura a perder (simulação dinâmica Hall 2011)
   function prazoSimulado(deficit, gordMeta) {
     if (!gordMeta || deficit <= 0) return null;
     const ing  = get - deficit;
-    const traj = simularTrajetoria(massa, gordKg, get, ing, 730); // 730d para déficits conservadores
+    const traj = simularTrajetoria(massa, gordKg, get, ing, 730);
     const fm0  = gordKg - gordMeta;
     const pt   = traj.find(p => p.gord <= fm0);
     return pt ? pt.dia : null;
   }
   const prazoHI  = gPerder > 0 ? prazoSimulado(defHI,  gPerder) : null;
   const prazoHII = gPerder > 0 ? prazoSimulado(defHII, gPerder) : null;
-  // Fórmula linear para gordura (não peso total): dias = gordura × 9441 / (déficit × fracGord)
-  const prazoHILinear  = gPerder > 0 && fracGord > 0 ? Math.round(gPerder * 9441 / (defHI  * fracGord)) : null;
-  const prazoHIILinear = gPerder > 0 && fracGord > 0 ? Math.round(gPerder * 9441 / (defHII * fracGord)) : null;
+  // Prazo linear Hipoc I/II: baseado no peso total perdido × 7700 kcal/kg (modelo clínico)
+  // pesoTotalHI = (gordaMesHI/fracGord) × (gPerder/gordaMesHI) = gPerder/fracGord — simplificado:
+  // Prazo linear Hipoc I/II: gPerder (kg gordura) × 7700 kcal/kg / déficit
+  // Modelo clínico direto: cada kg de gordura requer ~7700 kcal de déficit acumulado
+  const prazoHILinear  = gPerder > 0 && defHI  > 0 ? Math.round(gPerder * 7700 / defHI)  : null;
+  const prazoHIILinear = gPerder > 0 && defHII > 0 ? Math.round(gPerder * 7700 / defHII) : null;
 
-  // Bug #5 corrigido: defDia usa densReal (Forbes + Hall 2008), não 7700 fixo
+  // ── Déficit diário do ritmo selecionado ──
+  // RITMO_PP: déficits clínicos diretos (kcal/dia), não mais % do peso
+  // conservador=250, moderado=500, agressivo=750 — coerentes com literatura ACSM/AND
   let defDia;
   if (ritmo === 'manual') {
     defDia = num('meta-deficit') || 500;
   } else {
-    const ppMes = RITMO_PP[ritmo] || 1.0;
-    defDia = (ppMes / 100 * massa * densReal) / 30;
+    defDia = RITMO_PP[ritmo] || 500;
   }
 
   // ── Alpert (2005): taxa máxima de oxidação de gordura ──
-  // Fonte: Alpert SS (2005) J Theor Biol 233:1-13.
-  // Valor publicado: 290 ± 25 kJ/kg/dia — o código anterior usava 290 como kcal (erro de unidade).
-  // Conversão correta: 290 kJ ÷ 4,184 = 69,3 kcal/kg gordura/dia.
+  // 290 kJ/kg gordura/dia ÷ 4,184 = 69,3 kcal/kg gordura/dia
   const defMaxAlpert = gordKg * 69.3;
   const defMaxSeguro = Math.min(defMaxAlpert, get * 0.40,
                         get - (sexo === 'F' ? 1200 : 1500));
   const defAlertado  = defDia > defMaxSeguro;
-
-  // ── Forbes/Hall: partição gordura vs MLG na perda ──
-  // gPerder = gordura a perder (FAT kg), calculado por autoCalcCorte
-  // Forbes (1987): fracGord = fração de gordura por kg de peso total perdido
-  // Para perder gPerder kg de GORDURA, o peso total perdido = gPerder / fracGord
-  // → FFM perdida adicional = gPerder × (fracMLG / fracGord)
-  const C_FORBES        = 10.4;
-  const fracGord        = gordKg / (gordKg + C_FORBES);
-  const fracMLG         = 1 - fracGord;
-  const gordPerdidaReal = gPerder > 0 ? gPerder : 0;                          // = meta de gordura
-  const mlgPerdida      = gPerder > 0 && fracGord > 0
-                            ? gPerder * (fracMLG / fracGord) : 0;              // FFM acompanhante
 
   // ── Simulação dinâmica para o cenário do ritmo selecionado ──
   let diasSim = null;
@@ -1906,8 +1919,10 @@ function atualizarGET(ctx) {
     const pt       = trajTest.find(p => p.gord <= metaFm);
     diasSim = pt ? pt.dia : null;
   }
+  // Prazo linear do ritmo: gPerder (kg gordura) × 7700 kcal/kg / déficit diário
+  // Modelo clínico de 7700 kcal/kg aplicado diretamente sobre a gordura a perder
   const diasLinear = gPerder > 0 && defDia > 0
-    ? Math.round((gPerder * densReal) / defDia) : null;
+    ? Math.round(gPerder * 7700 / defDia) : null;
 
   // Trajetória para gráfico (usa déficit do ritmo selecionado)
   window._simTraj = gPerder > 0 && defDia > 0
@@ -1934,13 +1949,14 @@ function atualizarGET(ctx) {
   const intestaManut = Math.max(getManut, sexo === 'F' ? 1200 : 1500);
 
   // ── Labels ritmo ──
-  const prazoLabel = diasSim
-    ? `${diasSim}d (dinâmico)` : diasLinear
-    ? `${diasLinear}d (linear)` : '—';
+  // Prazo em formato clínico elegante (sem "d" crú)
+  const diasMeta   = diasSim || diasLinear;
+  const prazoLabel = diasMeta ? prazoLabelElegante(diasMeta) : '—';
+  const perdaMensal = defDia > 0 ? (defDia * 30.44 / 7700) : 0;
   const ritmoLabels = {
-    conservador: ['Conservador','var(--tl)'],
-    moderado:    ['Moderado',   'var(--gn)'],
-    agressivo:   ['Agressivo',  'var(--am)'],
+    conservador: ['Conservador · −250 kcal/dia','var(--tl)'],
+    moderado:    ['Moderado · −500 kcal/dia',   'var(--gn)'],
+    agressivo:   ['Agressivo · −750 kcal/dia',  'var(--am)'],
     manual: defDia < 300 ? ['Conservador','var(--tl)']
            : defDia < 600 ? ['Moderado','var(--gn)']
            : defDia < 900 ? ['Agressivo','var(--am)']
@@ -1962,11 +1978,23 @@ function atualizarGET(ctx) {
     ? `−${f0(defHII)} kcal/dia | ${f1(gordaMesHII*12/massa*100)}%BF/ano → ${prazoHII ? prazoHII+'d (Hall)' : prazoHIILinear ? prazoHIILinear+'d' : '—'}`
     : `−${f0(defHII)} kcal/dia | −${f1(gordaMesHII)} kg gord/mês`;
 
+  // Cenário personalizado do ritmo selecionado (manual ou preset)
+  const descRitmo = gPerder > 0 && defDia > 0
+    ? `−${f0(defDia)} kcal/dia · −${f1(perdaMensal)} kg/mês · meta em ${prazoLabel}`
+    : `−${f0(defDia)} kcal/dia · −${f1(defDia*30.44/7700)} kg/mês`;
+  const nomeRitmo = ritmo === 'manual'
+    ? `Hipocalórica — Manual`
+    : `Hipocalórica — ${ritmoLbl}`;
+  const cenarioRitmoCard = (gPerder > 0 && defDia > 0)
+    ? [{ n: nomeRitmo, d: descRitmo, k: get - defDia, on: true, c: ritmoCor }]
+    : [];
+
   el('cenarios-wrap').innerHTML = [
     { n:'Normocalórica',             d:'Manutenção do peso atual',                k:get,        on:false, c:'var(--tl)'    },
-    { n:'Intervenção (kcal/MLG)',    d:`${kcalLBM2} kcal × ${f1(mlg)} kg MLG`,   k:intv,       on:true,  c:'var(--ac)'    },
+    { n:'Intervenção (kcal/MLG)',    d:`${kcalLBM2} kcal × ${f1(mlg)} kg MLG`,   k:intv,       on:false, c:'var(--ac)'    },
     { n:'Hipocalórica I — 0,5%/mês',d:descHI,                                    k:ingHI,      on:false, c:'var(--am)'    },
     { n:'Hipocalórica II — 1,0%/mês',d:descHII,                                  k:ingHII,     on:false, c:'var(--rs)'    },
+    ...cenarioRitmoCard,
     { n:'Manutenção pós-meta',       d:`GET adaptado após atingir ${f1(pesoFinal)} kg`, k:intestaManut, on:false, c:'var(--pu)' },
   ].map(c=>`<div class="scen ${c.on?'on':''}">
     <div><div class="sname" style="color:${c.c}">${c.n}</div><div class="sdesc">${c.d}</div></div>
@@ -1991,6 +2019,10 @@ function atualizarGET(ctx) {
       <span class="sval">${f0(defHII)} kcal/dia &nbsp;→&nbsp; ${f1(gordaMesHII)} kg/mês</span>
     </div>
     ${gPerder > 0 ? `
+    <div class="srow" style="background:color-mix(in oklab,${ritmoCor} 10%,transparent);border-radius:6px;padding:10px 8px;margin:6px 0;border:1px solid color-mix(in oklab,${ritmoCor} 25%,transparent)">
+      <span class="slbl"><strong>Prazo para atingir a meta</strong><small>${ritmoLbl} · −${f0(perdaMensal)} kg/mês · ingestão: ${f0(get - defDia)} kcal/dia</small></span>
+      <span class="sval" style="color:${ritmoCor};font-size:15px;font-weight:700">${prazoLabel}</span>
+    </div>
     <div class="srow">
       <span class="slbl">Forbes: gordura + MLG perdida<small>BF=${f1(gordPctAtual)}% → para −${f1(gordPerdidaReal)}kg G, perde-se +${f1(mlgPerdida)}kg MLG</small></span>
       <span class="sval">${f1(gordPerdidaReal)}kg G + <span style="color:var(--rs)">${f1(mlgPerdida)}kg MLG</span> = ${f1(pesoTotalPerdido)}kg total</span>
@@ -2494,10 +2526,10 @@ function gerarHTMLRelatorio() {
   if (ritmoR === 'manual') {
     defDia = num('meta-deficit') || 500;
   } else {
-    const ppMesR = { conservador:0.5, moderado:1.0, agressivo:1.5 }[ritmoR] || 1.0;
-    defDia = (ppMesR / 100 * massa * densRealR) / 30;
+    defDia = { conservador:250, moderado:500, agressivo:750 }[ritmoR] || 500;
   }
-  const dias    = (defDia > 0 && gPerder > 0) ? Math.round(gPerder * densRealR / defDia) : 0;
+  // Prazo linear: gPerder (kg gordura) × 7700 / déficit diário
+  const dias = (defDia > 0 && gPerder > 0) ? Math.round(gPerder * 7700 / defDia) : 0;
   const hipI    = get ? get-defDia : null;
   const intv    = (num('meta-kcal-lbm')||32)*mlg;
   const novoGPct= gPerder>0 ? (gordKg-gPerder)/(massa-gPerder)*100 : null;
